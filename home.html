@@ -5,28 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ColEx - Welcome</title>
     <link rel="icon" type="image/x-icon" href="images/CloEx.png">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="home.css">
 </head>
 <body>
-    <nav class="d-flex justify-content-between px-5 py-3 align-items-center shadow">
+    <nav class="home-nav">
         <div class="navlogo">
-            <img src="images/CloEx.png" alt="company logo" width="60px">
+            <img src="images/CloEx.png" alt="ColEx" width="44px">
         </div>
         <button onclick="window.location.href='login.html'" class="login-button">Login</button>
     </nav>
 
-    <!-- Product Grid -->
+    <!-- Product Grid (public preview) -->
     <div id="product-container-home" class="product-grid">
-        <!-- Products will be injected here by JavaScript -->
+        <!-- Products injected by cardstorage.js -->
     </div>
 
     <script src="notifications.js"></script>
     <script src="cardstorage.js" type="module"></script>
 
-    <!-- Fix #6: redirect already-authenticated users straight to the shop.
-         Reuses the named 'cardstorage' app if cardstorage.js already created it,
-         otherwise creates it here. Either way no duplicate initialisation occurs. -->
+    <!-- Redirect already-authenticated users to the shop -->
     <script type="module">
         import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";

@@ -20,37 +20,37 @@
     </div>
 
     <div class="nav-tabs" id="nav-tabs">
-      <button class="nav-tab active" onclick="switchTab('purchases',this)">📦 All Purchases</button>
-      <button class="nav-tab"        onclick="switchTab('by-cashier',this)">👤 By Cashier</button>
-      <button class="nav-tab"        onclick="switchTab('products',this)">📦 Products</button>
-      <button class="nav-tab"        onclick="switchTab('accounts',this)">🔑 Manage Accounts</button>
+      <button class="nav-tab active" onclick="switchTab('purchases',this)">All Purchases</button>
+      <button class="nav-tab"        onclick="switchTab('by-cashier',this)">By Cashier</button>
+      <button class="nav-tab"        onclick="switchTab('products',this)">Products</button>
+      <button class="nav-tab"        onclick="switchTab('accounts',this)">Manage Accounts</button>
     </div>
 
     <div class="nav-right">
       <div class="nav-avatar" id="ha-avatar">HC</div>
       <span class="nav-name" id="ha-name">Head Cashier</span>
       <button class="btn-logout logout-button">Logout</button>
-      <button class="nav-hamburger" onclick="openDrawer()">☰</button>
+      <button class="nav-hamburger" onclick="openDrawer()">&#9776;</button>
     </div>
   </nav>
 
   <!-- MOBILE DRAWER -->
   <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
   <div class="drawer" id="nav-drawer">
-    <button class="drawer-close" onclick="closeDrawer()">×</button>
-    <button class="drawer-tab active" onclick="switchTab('purchases',this);closeDrawer()">📦 All Purchases</button>
-    <button class="drawer-tab"        onclick="switchTab('by-cashier',this);closeDrawer()">👤 By Cashier</button>
-    <button class="drawer-tab"        onclick="switchTab('products',this);closeDrawer()">📦 Products</button>
-    <button class="drawer-tab"        onclick="switchTab('accounts',this);closeDrawer()">🔑 Manage Accounts</button>
+    <button class="drawer-close" onclick="closeDrawer()">&#215;</button>
+    <button class="drawer-tab active" onclick="switchTab('purchases',this);closeDrawer()">All Purchases</button>
+    <button class="drawer-tab"        onclick="switchTab('by-cashier',this);closeDrawer()">By Cashier</button>
+    <button class="drawer-tab"        onclick="switchTab('products',this);closeDrawer()">Products</button>
+    <button class="drawer-tab"        onclick="switchTab('accounts',this);closeDrawer()">Manage Accounts</button>
   </div>
 
-  <!-- ═══════════════ TAB 1: ALL PURCHASES ════════════════════ -->
+  <!-- ═══ TAB 1: ALL PURCHASES ═══ -->
   <div class="tab-content active" id="tab-purchases">
     <div class="page-wrap">
       <div class="page-header">
         <div>
           <div class="page-title">All Purchases</div>
-          <div class="page-sub" id="purch-subtitle">Loading…</div>
+          <div class="page-sub" id="purch-subtitle">Loading...</div>
         </div>
       </div>
 
@@ -58,31 +58,31 @@
       <div class="stat-strip">
         <div class="stat-card">
           <div class="stat-label">Total Orders</div>
-          <div class="stat-value" id="s-total">—</div>
+          <div class="stat-value" id="s-total">&#8212;</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Verified</div>
-          <div class="stat-value green" id="s-verified">—</div>
+          <div class="stat-value green" id="s-verified">&#8212;</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Pending</div>
-          <div class="stat-value amber" id="s-pending">—</div>
+          <div class="stat-value amber" id="s-pending">&#8212;</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Revenue</div>
-          <div class="stat-value" id="s-revenue">—</div>
+          <div class="stat-value" id="s-revenue">&#8212;</div>
         </div>
       </div>
 
       <!-- Filters -->
       <div class="filter-bar">
         <div class="search-wrap">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="purch-search" placeholder="Search customer, ID, item…" oninput="applyPurchaseFilters()">
+          <span class="search-icon">&#9906;</span>
+          <input type="text" id="purch-search" placeholder="Search customer, ID, item..." oninput="applyPurchaseFilters()">
         </div>
         <button class="filter-pill active" data-f="all"      onclick="setPurchFilter(this)">All</button>
-        <button class="filter-pill"        data-f="pending"  onclick="setPurchFilter(this)">⏳ Pending</button>
-        <button class="filter-pill"        data-f="verified" onclick="setPurchFilter(this)">✓ Verified</button>
+        <button class="filter-pill"        data-f="pending"  onclick="setPurchFilter(this)">Pending</button>
+        <button class="filter-pill"        data-f="verified" onclick="setPurchFilter(this)">Verified</button>
         <input type="date" id="purch-date" class="filter-pill" style="cursor:pointer;" oninput="applyPurchaseFilters()" title="Filter by date">
       </div>
 
@@ -97,13 +97,13 @@
           <span></span>
         </div>
         <div id="purch-list">
-          <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading purchases…</div>
+          <div class="list-empty"><span class="list-empty-icon"></span>Loading purchases...</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════ TAB 2: BY CASHIER ═══════════════════════ -->
+  <!-- ═══ TAB 2: BY CASHIER ═══ -->
   <div class="tab-content" id="tab-by-cashier">
     <div class="page-wrap">
       <div class="page-header">
@@ -114,11 +114,11 @@
       </div>
 
       <div class="cashier-grid" id="cashier-grid">
-        <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading cashiers…</div>
+        <div class="list-empty"><span class="list-empty-icon"></span>Loading cashiers...</div>
       </div>
 
       <div id="cashier-detail" style="display:none;">
-        <div class="section-divider" id="cashier-detail-title">Verified by —</div>
+        <div class="section-divider" id="cashier-detail-title">Verified by &#8212;</div>
         <div class="list-card">
           <div class="list-header lh-cashier">
             <span>Purchase ID</span>
@@ -132,8 +132,7 @@
     </div>
   </div>
 
-
-  <!-- ═══════════════ TAB: PRODUCTS ════════════════════════ -->
+  <!-- ═══ TAB 3: PRODUCTS ═══ -->
   <div class="tab-content" id="tab-products">
     <div class="page-wrap">
       <div class="page-header">
@@ -145,12 +144,12 @@
 
       <div class="filter-bar">
         <div class="search-wrap">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="prod-search" placeholder="Search product name or cashier…" oninput="applyProductFilters()">
+          <span class="search-icon">&#9906;</span>
+          <input type="text" id="prod-search" placeholder="Search product name or cashier..." oninput="applyProductFilters()">
         </div>
         <button class="filter-pill active" data-f="all"  onclick="setProdFilter(this)">All</button>
-        <button class="filter-pill"        data-f="add"  onclick="setProdFilter(this)">➕ Added</button>
-        <button class="filter-pill"        data-f="edit" onclick="setProdFilter(this)">✏️ Edited</button>
+        <button class="filter-pill"        data-f="add"  onclick="setProdFilter(this)">Added</button>
+        <button class="filter-pill"        data-f="edit" onclick="setProdFilter(this)">Edited</button>
         <input type="date" id="prod-date" class="filter-pill" style="cursor:pointer;" oninput="applyProductFilters()" title="Filter by date">
       </div>
 
@@ -163,13 +162,13 @@
           <span>Date</span>
         </div>
         <div id="prod-log-list">
-          <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading…</div>
+          <div class="list-empty"><span class="list-empty-icon"></span>Loading...</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════ TAB 3: MANAGE ACCOUNTS ══════════════════ -->
+  <!-- ═══ TAB 4: MANAGE ACCOUNTS ═══ -->
   <div class="tab-content" id="tab-accounts">
     <div class="page-wrap">
       <div class="page-header">
@@ -221,11 +220,10 @@
         <div class="accounts-list">
           <div class="accounts-list-header">Existing Accounts</div>
           <div id="accounts-list-body">
-            <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading…</div>
+            <div class="list-empty"><span class="list-empty-icon"></span>Loading...</div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -251,17 +249,15 @@
       .lh-purchases, .lr-purchases { grid-template-columns: 1fr 1.5fr 1fr 80px !important; }
     }
   </style>
+
   <script src="notifications.js"></script>
   <script type="module" src="head-admin.js"></script>
 
   <script>
-    // ── Tab switching ───────────────────────────────────────────
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.nav-tab, .drawer-tab').forEach(el => el.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
-
-      // Highlight matching buttons in both nav and drawer
       document.querySelectorAll('.nav-tab, .drawer-tab').forEach(el => {
         if (el.getAttribute('onclick') && el.getAttribute('onclick').includes("'" + name + "'")) {
           el.classList.add('active');

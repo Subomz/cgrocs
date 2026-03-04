@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ColEx - Login</title>
     <link rel="icon" type="image/x-icon" href="images/CloEx.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="login.css">
 </head>
 <body>
@@ -15,7 +17,6 @@
         <h1 class="page-title">Welcome Back</h1>
         <p class="page-subtitle">Login to your ColEx account</p>
 
-        <!-- Bug fix #36: autocomplete attributes added so password managers work correctly -->
         <div class="form-field">
             <label for="email">Email Address</label>
             <input type="email" id="email" placeholder="jane@email.com"
@@ -23,7 +24,6 @@
         </div>
 
         <div class="form-field">
-            <!-- Password label row: label left, forgot-password link right -->
             <div class="password-label-row">
                 <label for="password">Password</label>
                 <button type="button" class="forgot-link" onclick="window.openResetModal()">

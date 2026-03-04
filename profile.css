@@ -1,392 +1,214 @@
 /* ============================================================
    ColEx — profile.css
-   Primary: white  |  Secondary: black
+   Design system: Black (#0a0a0a) + White — DM Sans font
    ============================================================ */
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+:root {
+  --black:    #0a0a0a;
+  --ink:      #1a1a1a;
+  --muted:    #6b7280;
+  --faint:    #f4f4f5;
+  --border:   #e4e4e7;
+  --green:    #16a34a;
+  --green-bg: #dcfce7;
+  --amber:    #d97706;
+  --amber-bg: #fef3c7;
+  --font:     'DM Sans', 'Segoe UI', Tahoma, sans-serif;
+  --mono:     'DM Mono', 'Courier New', monospace;
+}
+
 body {
-    background: #f4f4f4;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: #222;
-    min-height: 100vh;
+  background: #f8f8f9;
+  font-family: var(--font);
+  color: var(--ink);
+  min-height: 100vh;
 }
 
 /* ── Nav ── */
 nav {
-    background: white !important;
-    border-bottom: 1px solid #e0e0e0;
-    position: sticky;
-    top: 0;
-    z-index: 9999;
+  background: var(--black) !important;
+  border-bottom: none;
+  position: sticky; top: 0; z-index: 9999;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
 }
-
 .navlogo img { display: block; }
 
-.nav-actions {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-}
+.nav-actions { display: flex; gap: 12px; align-items: center; }
 
 .btn-back {
-    padding: 7px 18px;
-    border: 1.5px solid #111;
-    background: white;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+  padding: 7px 18px; border-radius: 20px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.20);
+  color: rgba(255,255,255,0.85);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: var(--font);
+  transition: background 0.2s;
 }
-
-.btn-back:hover { background: #111; color: white; }
+.btn-back:hover { background: rgba(255,255,255,0.20); color: white; }
 
 .logout-button {
-    padding: 7px 18px;
-    border: 1.5px solid #111;
-    background: #111;
-    color: white;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+  padding: 7px 18px; border-radius: 20px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.70);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: var(--font);
+  transition: background 0.2s;
 }
-
-.logout-button:hover { background: white; color: #111; }
+.logout-button:hover { background: rgba(255,255,255,0.20); color: white; }
 
 /* ── Main layout ── */
 .profile-main {
-    max-width: 1100px;
-    margin: 36px auto;
-    padding: 0 20px 40px;
-    display: grid;
-    grid-template-columns: 280px 1fr;
-    gap: 28px;
-    align-items: start;
+  max-width: 1100px; margin: 36px auto;
+  padding: 0 20px 40px;
+  display: grid; grid-template-columns: 280px 1fr;
+  gap: 28px; align-items: start;
 }
 
 /* ── Sidebar ── */
 .profile-sidebar {
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.07);
-    padding: 32px 24px;
-    text-align: center;
-    position: sticky;
-    top: 90px;
+  background: white; border: 1.5px solid var(--border);
+  border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  padding: 32px 24px; text-align: center;
+  position: sticky; top: 90px;
 }
 
-.avatar-wrap {
-    position: relative;
-    display: inline-block;
-    margin-bottom: 16px;
+.avatar-wrap { position: relative; display: inline-block; margin-bottom: 16px; }
+.avatar-img  {
+  width: 110px; height: 110px; border-radius: 50%;
+  object-fit: cover; border: 2px solid var(--border); display: block;
 }
-
-.avatar-img {
-    width: 110px;
-    height: 110px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid #111;
-    display: block;
-}
-
 .avatar-edit-btn {
-    position: absolute;
-    bottom: 4px;
-    right: 4px;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: #111;
-    color: white;
-    border: 2px solid white;
-    font-size: 14px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
+  position: absolute; bottom: 4px; right: 4px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--black); color: white;
+  border: 2px solid white; font-size: 14px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
 }
-
 .avatar-edit-btn:hover { background: #444; }
 
-.sidebar-name {
-    font-size: 20px;
-    font-weight: 700;
-    color: #111;
-    margin-bottom: 4px;
-}
+.sidebar-name  { font-size: 20px; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+.sidebar-email { font-size: 13px; color: var(--muted); margin-bottom: 18px; word-break: break-all; }
 
-.sidebar-email {
-    font-size: 13px;
-    color: #888;
-    margin-bottom: 18px;
-    word-break: break-all;
-}
-
-.sidebar-badges {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 24px;
-}
-
+.sidebar-badges { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
 .badge-item {
-    font-size: 13px;
-    padding: 7px 12px;
-    background: #f5f5f5;
-    border-radius: 8px;
-    color: #444;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  font-size: 13px; padding: 7px 12px;
+  background: var(--faint); border-radius: 8px;
+  color: var(--muted); text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .btn-save-all {
-    width: 100%;
-    padding: 12px;
-    background: #111;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    margin-bottom: 10px;
-    transition: background 0.2s, transform 0.1s;
+  width: 100%; padding: 12px;
+  background: var(--black); color: white;
+  border: none; border-radius: 8px;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer; margin-bottom: 10px;
+  font-family: var(--font);
+  transition: background 0.2s, transform 0.1s;
 }
-
 .btn-save-all:hover  { background: #333; }
 .btn-save-all:active { transform: scale(0.98); }
-
-.btn-logout-side {
-    width: 100%;
-}
+.btn-logout-side { width: 100%; }
 
 /* ── Form section ── */
-.profile-form-section {
-    display: flex;
-    flex-direction: column;
-    gap: 22px;
-}
+.profile-form-section { display: flex; flex-direction: column; gap: 22px; }
 
 .form-card {
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.07);
-    padding: 28px 28px 24px;
+  background: white; border: 1.5px solid var(--border);
+  border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  padding: 28px 28px 24px;
 }
 
 .form-card-title {
-    font-size: 17px;
-    font-weight: 700;
-    color: #111;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 1.5px solid #f0f0f0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  font-size: 17px; font-weight: 800; color: var(--ink);
+  margin-bottom: 20px; padding-bottom: 12px;
+  border-bottom: 1.5px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
 }
 
-/* Verified badge */
 .verified-badge {
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 9px;
-    background: #111;
-    color: white;
-    border-radius: 20px;
-    letter-spacing: 0.04em;
+  font-size: 11px; font-weight: 700; padding: 3px 9px;
+  background: var(--black); color: white;
+  border-radius: 20px; letter-spacing: .04em;
 }
 
-.label-note {
-    font-size: 11px;
-    font-weight: 400;
-    color: #aaa;
-}
+.label-note { font-size: 11px; font-weight: 400; color: var(--muted); }
 
-.field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-}
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
-.form-field {
-    margin-bottom: 16px;
-}
-
+.form-field { margin-bottom: 16px; }
 .form-field:last-child { margin-bottom: 0; }
-
 .form-field label {
-    display: block;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #888;
-    margin-bottom: 6px;
+  display: block; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 6px;
 }
-
 .form-field input {
-    width: 100%;
-    padding: 10px 13px;
-    border: 1.5px solid #e0e0e0;
-    border-radius: 8px;
-    font-size: 14px;
-    color: #222;
-    background: #fafafa;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    font-family: inherit;
+  width: 100%; padding: 11px 14px;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  font-size: 14px; color: var(--ink); background: #fafafa;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: var(--font); outline: none;
 }
-
 .form-field input:focus {
-    outline: none;
-    border-color: #111;
-    box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
-    background: #fff;
+  border-color: var(--black);
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+  background: #fff;
 }
+.form-field input:disabled { background: var(--faint); color: var(--muted); cursor: default; }
 
-.form-field input:disabled {
-    background: #f0f0f0;
-    color: #aaa;
-    cursor: default;
-}
-
-/* Address wrapper */
+/* Address field */
 .address-wrap { position: relative; }
-
 .address-wrap input { padding-right: 36px; }
-
-.pin-icon {
-    position: absolute;
-    right: 11px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 16px;
-    pointer-events: none;
-}
+.pin-icon { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); font-size: 16px; pointer-events: none; }
 
 /* ── Purchase History ── */
-.empty-state {
-    text-align: center;
-    color: #aaa;
-    font-size: 14px;
-    padding: 20px 0;
-}
+.empty-state { text-align: center; color: var(--muted); font-size: 14px; padding: 20px 0; }
 
 .purchase-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 14px 0;
-    border-bottom: 1px solid #f0f0f0;
-    gap: 12px;
+  display: flex; justify-content: space-between;
+  align-items: flex-start; padding: 14px 0;
+  border-bottom: 1px solid var(--border); gap: 12px;
 }
-
 .purchase-item:last-child { border-bottom: none; }
 
 .purchase-meta { flex: 1; }
+.purchase-id   { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.purchase-items-text { font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+.purchase-date { font-size: 12px; color: var(--muted); }
 
-.purchase-id {
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    color: #888;
-    margin-bottom: 4px;
+.purchase-amount { font-size: 16px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+.purchase-status { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; margin-top: 4px; text-align: center; }
+.status-pending  { background: var(--amber-bg); color: var(--amber); }
+.status-ready    { background: var(--green-bg);  color: var(--green); font-weight: 700; }
+.status-verified { background: var(--faint);     color: var(--muted); }
+
+/* View QR button */
+.btn-reshow-qr {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; background: white; color: var(--black);
+  border: 1.5px solid var(--black); border-radius: 20px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap; font-family: var(--font);
 }
+.btn-reshow-qr:hover { background: var(--black); color: white; }
 
-.purchase-items-text {
-    font-size: 13px;
-    color: #444;
-    margin-bottom: 2px;
-}
-
-.purchase-date {
-    font-size: 12px;
-    color: #bbb;
-}
-
-.purchase-amount {
-    font-size: 16px;
-    font-weight: 700;
-    color: #111;
-    white-space: nowrap;
-}
-
-.purchase-status {
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 20px;
-    margin-top: 4px;
-    text-align: center;
-}
-
-/* Fix #4: renamed .status-unverified → .status-pending to match what
-   profile.js actually emits. The old name was dead CSS — nothing ever
-   applied it. The three real states are pending / ready / verified. */
-.status-pending  { background: #fff8e1; color: #b45309; }
-.status-ready    { background: #e6f9ed; color: #15803d; font-weight: 700; }
-.status-verified { background: #f0f0f0; color: #555; }
+/* ── Google Maps autocomplete ── */
+.pac-container { z-index: 99999 !important; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); font-family: var(--font); }
 
 /* ── Responsive ── */
 @media (max-width: 860px) {
-    .profile-main {
-        grid-template-columns: 1fr;
-    }
-
-    .profile-sidebar {
-        position: static;
-    }
-
-    .field-row {
-        grid-template-columns: 1fr;
-    }
+  .profile-main { grid-template-columns: 1fr; }
+  .profile-sidebar { position: static; }
+  .field-row { grid-template-columns: 1fr; }
 }
-
 @media (max-width: 480px) {
-    nav { padding-left: 20px !important; padding-right: 20px !important; }
-    .profile-main { padding: 0 12px 30px; margin-top: 20px; }
-    .form-card { padding: 20px 16px; }
-}
-
-/* Google Maps autocomplete dropdown */
-.pac-container {
-    z-index: 99999 !important;
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-/* ── View QR button in purchase history ── */
-.btn-reshow-qr {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  background: white;
-  color: #111;
-  border: 1.5px solid #111;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  white-space: nowrap;
-  font-family: inherit;
-}
-
-.btn-reshow-qr::before {
-  content: "▦";
-  font-size: 13px;
-  line-height: 1;
-}
-
-.btn-reshow-qr:hover {
-  background: #111;
-  color: white;
+  nav { padding-left: 16px !important; padding-right: 16px !important; }
+  .profile-main { padding: 0 12px 30px; margin-top: 20px; }
+  .form-card { padding: 20px 16px; }
 }
