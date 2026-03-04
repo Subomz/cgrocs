@@ -12,7 +12,7 @@ const db = getFirestore(app);
 //     Live key:  pk_live_...   → real charges, must be kept secret on the server
 //     Never commit your SECRET key (sk_...) here — this file is client-side.
 // ─────────────────────────────────────────────────────────────────────────────
-const PAYSTACK_PUBLIC_KEY = 'pk_test_d2c21aba4dc227c848ffca6dd5f44c50e75526b3';
+const PAYSTACK_PUBLIC_KEY = 'pk_live_e0c9caffa250105c691eb5a76f63adac7b07ca34'; // REPLACE WITH YOUR LIVE PUBLIC KEY
 
 // Cart management system
 let cart = [];
