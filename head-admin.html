@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ColEx — Head Admin</title>
+  <link rel="icon" type="image/x-icon" href="images/CloEx.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="head-admin.css">
+  <script src="head-admin-auth-guard.js" type="module"></script>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-brand">
+      <img src="images/CloEx.png" alt="ColEx">
+      <span class="nav-brand-label">Head Admin</span>
+    </div>
+
+    <div class="nav-tabs" id="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('purchases',this)">📦 All Purchases</button>
+      <button class="nav-tab"        onclick="switchTab('by-cashier',this)">👤 By Cashier</button>
+      <button class="nav-tab"        onclick="switchTab('products',this)">📦 Products</button>
+      <button class="nav-tab"        onclick="switchTab('accounts',this)">🔑 Manage Accounts</button>
+    </div>
+
+    <div class="nav-right">
+      <div class="nav-avatar" id="ha-avatar">HC</div>
+      <span class="nav-name" id="ha-name">Head Cashier</span>
+      <button class="btn-logout logout-button">Logout</button>
+      <button class="nav-hamburger" onclick="openDrawer()">☰</button>
+    </div>
+  </nav>
+
+  <!-- MOBILE DRAWER -->
+  <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+  <div class="drawer" id="nav-drawer">
+    <button class="drawer-close" onclick="closeDrawer()">×</button>
+    <button class="drawer-tab active" onclick="switchTab('purchases',this);closeDrawer()">📦 All Purchases</button>
+    <button class="drawer-tab"        onclick="switchTab('by-cashier',this);closeDrawer()">👤 By Cashier</button>
+    <button class="drawer-tab"        onclick="switchTab('products',this);closeDrawer()">📦 Products</button>
+    <button class="drawer-tab"        onclick="switchTab('accounts',this);closeDrawer()">🔑 Manage Accounts</button>
+  </div>
+
+  <!-- ═══════════════ TAB 1: ALL PURCHASES ════════════════════ -->
+  <div class="tab-content active" id="tab-purchases">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">All Purchases</div>
+          <div class="page-sub" id="purch-subtitle">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stat-strip">
+        <div class="stat-card">
+          <div class="stat-label">Total Orders</div>
+          <div class="stat-value" id="s-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Verified</div>
+          <div class="stat-value green" id="s-verified">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pending</div>
+          <div class="stat-value amber" id="s-pending">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value" id="s-revenue">—</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="purch-search" placeholder="Search customer, ID, item…" oninput="applyPurchaseFilters()">
+        </div>
+        <button class="filter-pill active" data-f="all"      onclick="setPurchFilter(this)">All</button>
+        <button class="filter-pill"        data-f="pending"  onclick="setPurchFilter(this)">⏳ Pending</button>
+        <button class="filter-pill"        data-f="verified" onclick="setPurchFilter(this)">✓ Verified</button>
+        <input type="date" id="purch-date" class="filter-pill" style="cursor:pointer;" oninput="applyPurchaseFilters()" title="Filter by date">
+      </div>
+
+      <!-- List -->
+      <div class="list-card">
+        <div class="list-header lh-purchases">
+          <span>Purchase ID</span>
+          <span>Customer</span>
+          <span>Amount</span>
+          <span class="col-cashier">Verified By</span>
+          <span>Date</span>
+          <span></span>
+        </div>
+        <div id="purch-list">
+          <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading purchases…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB 2: BY CASHIER ═══════════════════════ -->
+  <div class="tab-content" id="tab-by-cashier">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Purchases by Cashier</div>
+          <div class="page-sub">Select a cashier to see their verified orders</div>
+        </div>
+      </div>
+
+      <div class="cashier-grid" id="cashier-grid">
+        <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading cashiers…</div>
+      </div>
+
+      <div id="cashier-detail" style="display:none;">
+        <div class="section-divider" id="cashier-detail-title">Verified by —</div>
+        <div class="list-card">
+          <div class="list-header lh-cashier">
+            <span>Purchase ID</span>
+            <span>Amount</span>
+            <span class="col-purchases">Items</span>
+            <span>Verified At</span>
+          </div>
+          <div id="cashier-detail-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════ TAB: PRODUCTS ════════════════════════ -->
+  <div class="tab-content" id="tab-products">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Product Activity</div>
+          <div class="page-sub">All products added or edited by cashiers</div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="prod-search" placeholder="Search product name or cashier…" oninput="applyProductFilters()">
+        </div>
+        <button class="filter-pill active" data-f="all"  onclick="setProdFilter(this)">All</button>
+        <button class="filter-pill"        data-f="add"  onclick="setProdFilter(this)">➕ Added</button>
+        <button class="filter-pill"        data-f="edit" onclick="setProdFilter(this)">✏️ Edited</button>
+        <input type="date" id="prod-date" class="filter-pill" style="cursor:pointer;" oninput="applyProductFilters()" title="Filter by date">
+      </div>
+
+      <div class="list-card">
+        <div class="list-header" style="grid-template-columns:1fr 1.5fr 1fr 2fr 1fr;">
+          <span>Action</span>
+          <span>Product</span>
+          <span>By</span>
+          <span>Changes</span>
+          <span>Date</span>
+        </div>
+        <div id="prod-log-list">
+          <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB 3: MANAGE ACCOUNTS ══════════════════ -->
+  <div class="tab-content" id="tab-accounts">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Manage Accounts</div>
+          <div class="page-sub">Create new cashier or admin logins</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+
+        <!-- Create account form -->
+        <div class="form-card">
+          <div class="form-title">Create New Account</div>
+          <div class="form-sub">New staff can log in at the standard admin login page.</div>
+
+          <div class="field-row">
+            <div class="field">
+              <label>First Name</label>
+              <input type="text" id="new-first" placeholder="Jane">
+            </div>
+            <div class="field">
+              <label>Last Name</label>
+              <input type="text" id="new-last" placeholder="Doe">
+            </div>
+          </div>
+          <div class="field">
+            <label>Role</label>
+            <select id="new-role">
+              <option value="Cashier">Cashier</option>
+              <option value="Senior Cashier">Senior Cashier</option>
+              <option value="Head Cashier">Head Cashier</option>
+              <option value="Supervisor">Supervisor</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Email Address</label>
+            <input type="email" id="new-email" placeholder="jane@colexstore.com">
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input type="password" id="new-password" placeholder="At least 6 characters">
+          </div>
+
+          <button class="btn-primary" id="btn-create-account" onclick="createAccount()">Create Account</button>
+        </div>
+
+        <!-- Existing accounts list -->
+        <div class="accounts-list">
+          <div class="accounts-list-header">Existing Accounts</div>
+          <div id="accounts-list-body">
+            <div class="list-empty"><span class="list-empty-icon">⏳</span>Loading…</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <style>
+    .btn-reprint {
+      padding: 5px 12px; border-radius: 20px;
+      border: 1.5px solid #e4e4e7; background: white;
+      color: #6b7280; font-size: 12px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+      transition: all .15s; white-space: nowrap;
+    }
+    .btn-reprint:hover { border-color: #0a0a0a; color: #0a0a0a; background: #f4f4f5; }
+    .btn-verify-ha {
+      padding: 5px 12px; border-radius: 20px;
+      border: 1.5px solid #16a34a; background: #dcfce7;
+      color: #16a34a; font-size: 12px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      transition: all .15s; white-space: nowrap;
+    }
+    .btn-verify-ha:hover { background: #16a34a; color: white; }
+    .lh-purchases, .lr-purchases { grid-template-columns: 1fr 2fr 1fr 1.2fr 1fr 80px !important; }
+    @media (max-width: 700px) {
+      .lh-purchases, .lr-purchases { grid-template-columns: 1fr 1.5fr 1fr 80px !important; }
+    }
+  </style>
+  <script src="notifications.js"></script>
+  <script type="module" src="head-admin.js"></script>
+
+  <script>
+    // ── Tab switching ───────────────────────────────────────────
+    function switchTab(name, btn) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-tab, .drawer-tab').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+
+      // Highlight matching buttons in both nav and drawer
+      document.querySelectorAll('.nav-tab, .drawer-tab').forEach(el => {
+        if (el.getAttribute('onclick') && el.getAttribute('onclick').includes("'" + name + "'")) {
+          el.classList.add('active');
+        }
+      });
+    }
+
+    function openDrawer() {
+      document.getElementById('nav-drawer').classList.add('open');
+      document.getElementById('drawer-overlay').classList.add('open');
+    }
+    function closeDrawer() {
+      document.getElementById('nav-drawer').classList.remove('open');
+      document.getElementById('drawer-overlay').classList.remove('open');
+    }
+  </script>
+</body>
+</html>

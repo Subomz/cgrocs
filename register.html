@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColEx - Create Account</title>
+    <link rel="icon" type="image/x-icon" href="images/CloEx.png">
+    <link rel="stylesheet" href="register.css">
+</head>
+<body>
+    <div class="register-wrapper">
+        <div class="register-logo">
+            <img src="images/CloEx.png" alt="ColEx Logo">
+        </div>
+        <h1 class="page-title">Create Account</h1>
+        <p class="page-subtitle">Join ColEx — it only takes a minute</p>
+
+        <!-- Personal Info -->
+        <p class="section-label">Personal Info</p>
+        <div class="field-group">
+            <div class="form-field">
+                <label for="first-name">First Name</label>
+                <input type="text" id="first-name" placeholder="Jane" required>
+            </div>
+            <div class="form-field">
+                <label for="last-name">Last Name</label>
+                <input type="text" id="last-name" placeholder="Doe" required>
+            </div>
+        </div>
+        <div class="form-field">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" placeholder="+234 800 000 0000">
+        </div>
+
+        <!-- Account -->
+        <p class="section-label">Account Details</p>
+        <div class="form-field">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" placeholder="jane@email.com" autocomplete="email" required>
+        </div>
+        <div class="form-field">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="At least 6 characters" autocomplete="new-password" required>
+        </div>
+
+        <button id="submit" type="button">Create Account</button>
+
+        <hr class="divider">
+        <p class="login-link">Already have an account? <a href="login.html">Login Here</a></p>
+    </div>
+
+    <script src="notifications.js"></script>
+    <script type="module" src="register.js"></script>
+</body>
+</html>

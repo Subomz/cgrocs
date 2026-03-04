@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColEx - Admin Panel</title>
+    <link rel="icon" type="image/x-icon" href="images/CloEx.png">
+    <link rel="stylesheet" href="admin.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    
+    <!-- QR Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <!-- ⚠️ AUTHENTICATION GUARD - MUST LOAD FIRST ⚠️ -->
+    <script src="admin-auth-guard.js" type="module"></script>
+</head>
+<body style="visibility: hidden;">
+    <!-- Navbar: logo + tabs on left | cashier + logout on right -->
+    <!-- On mobile: tabs collapse into a hamburger button in the same position -->
+    <nav class="admin-nav" id="admin-nav">
+        <!-- Left: logo, then tabs (desktop) or hamburger (mobile) -->
+        <div class="nav-left">
+            <div class="navlogo">
+                <img src="images/CloEx.png" alt="company logo" width="48px">
+            </div>
+            <!-- Desktop tab buttons -->
+            <div class="tabs-header" id="tabs-header">
+                <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+                <button class="tab-btn" onclick="switchTab('verification')">✅ Verify</button>
+                <button class="tab-btn" onclick="switchTab('products')">📦 Products</button>
+            </div>
+            <!-- Mobile hamburger — sits in the same spot as the tabs -->
+            <button class="tabs-menu-btn" id="tabs-menu-btn" onclick="window.toggleTabsMenu()" aria-label="Open menu">&#9776; Menu</button>
+        </div>
+
+        <!-- Right: cashier info + logout -->
+        <div class="nav-right">
+            <div id="cashier-info" class="nav-cashier">
+                <div id="cashier-avatar" class="nav-cashier-avatar"></div>
+                <span id="cashier-name" class="nav-cashier-name"></span>
+            </div>
+            <button class="logout-button" type="button">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Mobile sidebar overlay -->
+    <div class="tabs-overlay" id="tabs-overlay" onclick="window.closeTabsMenu()"></div>
+    <!-- Mobile sidebar drawer -->
+    <div class="tabs-drawer" id="tabs-drawer">
+        <div class="tabs-drawer-header">
+            <span>Menu</span>
+            <button onclick="window.closeTabsMenu()" class="tabs-drawer-close">&#215;</button>
+        </div>
+        <button class="drawer-tab-btn active" onclick="switchTab('dashboard');window.closeTabsMenu()">📊 Dashboard</button>
+        <button class="drawer-tab-btn" onclick="switchTab('verification');window.closeTabsMenu()">✅ Verify Purchases</button>
+        <button class="drawer-tab-btn" onclick="switchTab('products');window.closeTabsMenu()">📦 Manage Products</button>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div id="dashboard-tab" class="tab-content active">
+        <div class="dashboard-wrap">
+            <!-- Cashier Profile Card -->
+            <div class="dash-profile-card">
+                <div id="dash-avatar" class="dash-avatar-circle"></div>
+                <div>
+                    <div id="dash-cashier-name" class="dash-cashier-name">Loading...</div>
+                    <div id="dash-cashier-email" class="dash-cashier-email"></div>
+                    <button class="btn-edit-profile" onclick="window.openCashierProfileModal()">Edit Profile</button>
+                </div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="dash-stats">
+                <div class="stat-card">
+                    <div class="stat-icon">🧾</div>
+                    <div class="stat-value" id="stat-today">—</div>
+                    <div class="stat-label">Orders Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⏳</div>
+                    <div class="stat-value" id="stat-pending">—</div>
+                    <div class="stat-label">Pending Verification</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-value" id="stat-revenue">—</div>
+                    <div class="stat-label">Revenue Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📦</div>
+                    <div class="stat-value" id="stat-lowstock">—</div>
+                    <div class="stat-label">Low Stock Items</div>
+                </div>
+            </div>
+
+            <!-- Low Stock Alerts -->
+            <div class="dash-section">
+                <h3 class="dash-section-title">⚠️ Low Stock Alerts</h3>
+                <div id="low-stock-list"><p class="dash-empty">Loading...</p></div>
+            </div>
+
+            <!-- Recent Orders -->
+            <div class="dash-section">
+                <h3 class="dash-section-title">🕐 Recent Orders</h3>
+                <div id="recent-orders-list"><p class="dash-empty">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Verification Tab -->
+    <div id="verification-tab" class="tab-content">
+        <div class="verification-section">
+            <h3>Verify Purchase</h3>
+            <div class="verification-container">
+                <div class="verification-method">
+                    <h4>Scan QR Code</h4>
+                    <button onclick="toggleScanner()" class="btn-scan">
+                        <span id="scanner-btn-text">Start Scanner</span>
+                    </button>
+                    <div id="qr-reader" style="display: none;"></div>
+                </div>
+                
+                <div class="verification-divider">OR</div>
+                
+                <div class="verification-method">
+                    <h4>Enter Purchase ID</h4>
+                    <input type="text" id="purchase-id-input" placeholder="e.g. aB3Xq9">
+                    <button onclick="verifyPurchaseId()" class="btn-verify">Verify</button>
+                </div>
+            </div>
+            
+            <div id="verification-result" style="display: none;"></div>
+        </div>
+
+        <!-- Pending Purchases (below verify block) -->
+        <div class="pending-wrap">
+            <div class="pending-header">
+                <div>
+                    <h2 class="pending-title">Pending Purchases</h2>
+                    <p class="pending-subtitle" id="pending-subtitle">Loading...</p>
+                </div>
+                <button class="btn-refresh-pending" onclick="window.loadPendingPurchases()">↻ Refresh</button>
+            </div>
+            <div class="pending-filters">
+                <button class="filter-btn active" data-filter="all"   onclick="window.setPendingFilter(this)">All</button>
+                <button class="filter-btn" data-filter="today"        onclick="window.setPendingFilter(this)">Today</button>
+                <button class="filter-btn" data-filter="week"         onclick="window.setPendingFilter(this)">This Week</button>
+                <button class="filter-btn" data-filter="month"        onclick="window.setPendingFilter(this)">This Month</button>
+                <input type="date" id="pending-date-pick" class="pending-date-input"
+                       onchange="window.setPendingFilter(this)" data-filter="pick"
+                       title="Pick a specific date">
+            </div>
+            <div id="pending-list">
+                <p class="dash-empty">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products Tab -->
+    <div id="products-tab" class="tab-content">
+        <div class="admin-panel" id="admin-panel">
+            <h3>Add / Edit Product</h3>
+            <input type="hidden" id="edit-index">
+            <input type="text" id="p-name" placeholder="Product Name" required>
+            <input type="number" id="p-price" placeholder="Price (e.g. 99)" min="0" step="0.01" required>
+            <label for="p-stock" style="display:block; font-size: 12px; margin-bottom: 4px;">Quantity in Stock:</label>
+            <input type="number" id="p-stock" placeholder="0" min="0" required>
+            <label for="p-desc" style="display:block; font-size: 12px; margin-bottom: 4px; margin-top:8px;">Description (optional):</label>
+            <textarea id="p-desc" placeholder="e.g. 1 Litre, Brand name, flavour, weight…" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px;outline:none;" onfocus="this.style.borderColor='#111'" onblur="this.style.borderColor='#ddd'"></textarea>
+            <label for="p-category" style="display:block; font-size: 12px; margin-bottom: 4px; margin-top:8px;">Category:</label>
+            <div class="category-input-wrap">
+                <select id="p-category" class="category-select">
+                    <option value="">— No category —</option>
+                </select>
+                <button type="button" class="btn-add-category" onclick="window.openAddCategoryModal()">+ New</button>
+            </div>
+            
+            <!-- Image Input Toggle -->
+            <button type="button" id="toggle-input-btn" onclick="toggleImageInputMethod()" class="btn-toggle-input">
+                Switch to File Upload
+            </button>
+            
+            <!-- URL Input Section -->
+            <div id="url-input-section" style="display: block;">
+                <label for="p-img" style="display:block; font-size: 12px; margin-bottom: 4px; margin-top: 10px;">Image URL (optional):</label>
+                <input type="url" id="p-img" placeholder="https://example.com/image.jpg">
+            </div>
+            
+            <!-- File Upload Section -->
+            <div id="file-input-section" style="display: none;">
+                <label for="p-img-file" style="display:block; font-size: 12px; margin-bottom: 4px; margin-top: 10px;">Upload Image:</label>
+                <input type="file" id="p-img-file" accept="image/*" onchange="handleImageSelect(event)" class="file-input">
+                <p style="font-size: 11px; color: #666; margin-top: 4px;">Max size: 5MB. Accepted formats: JPG, PNG, GIF, WebP</p>
+                <div id="image-preview-container" style="display: none; margin-top: 10px; text-align: center;"></div>
+            </div>
+            
+            <button id="save-btn" onclick="saveProduct()">Save Product</button>
+        </div>
+
+        <!-- Admin search + category filter -->
+        <div id="admin-shop-controls">
+            <div id="admin-search-wrap">
+                <span>🔍</span>
+                <input type="text" id="admin-product-search" placeholder="Search products…" oninput="window.filterAdminProducts()" autocomplete="off">
+                <button id="admin-search-clear" onclick="window.clearAdminSearch()" title="Clear">✕</button>
+            </div>
+            <button id="admin-filter-toggle-btn" class="filter-toggle-btn" onclick="window.toggleFilterBar('admin-category-bar','admin-filter-toggle-btn')">
+                ⊞ Filter
+            </button>
+            <div id="admin-category-bar" class="filter-bar">
+                <button class="cat-btn active" data-cat="All" onclick="window.selectAdminCategory(this)">All</button>
+            </div>
+        </div>
+        <div id="no-results-admin" style="display:none; text-align:center; padding:30px; color:#aaa;">No products match your search.</div>
+
+        <div id="product-container-admin" class="product-grid">
+            <!-- Products will be injected here by JavaScript -->
+        </div>
+    </div>
+
+    <script src="notifications.js"></script>
+    <script src="cardstorage.js" type="module"></script>
+    <script src="admin-verification.js" type="module"></script>
+    <script src="admin-dashboard.js" type="module"></script>
+    <script>
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn, .drawer-tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName + '-tab').classList.add('active');
+            const idx = ['dashboard','verification','products'].indexOf(tabName);
+            if (idx !== -1) {
+                document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+                document.querySelectorAll('.drawer-tab-btn')[idx].classList.add('active');
+            }
+            if (tabName === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
+            if (tabName === 'verification' && typeof window.loadPendingPurchases === 'function') window.loadPendingPurchases();
+        }
+
+        window.toggleTabsMenu = function() {
+            document.getElementById('tabs-drawer').classList.toggle('open');
+            document.getElementById('tabs-overlay').classList.toggle('open');
+        }
+        window.closeTabsMenu = function() {
+            document.getElementById('tabs-drawer').classList.remove('open');
+            document.getElementById('tabs-overlay').classList.remove('open');
+        }
+
+        // Load dashboard on page ready
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (typeof window.loadDashboard === 'function') window.loadDashboard();
+                if (typeof window.loadPendingPurchases === 'function') window.loadPendingPurchases();
+            }, 800);
+        });
+    </script>
+</body>
+</html>

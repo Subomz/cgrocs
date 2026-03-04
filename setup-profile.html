@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColEx - Complete Your Profile</title>
+    <link rel="icon" type="image/x-icon" href="images/CloEx.png">
+    <link rel="stylesheet" href="register.css">
+    <style>
+        .setup-banner {
+            background: #111;
+            color: white;
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .setup-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+        .setup-banner strong { display: block; font-size: 15px; margin-bottom: 2px; }
+        .skip-link {
+            display: block; text-align: center; margin-top: 12px;
+            font-size: 13px; color: #aaa; cursor: pointer; text-decoration: underline;
+        }
+        .skip-link:hover { color: #555; }
+    </style>
+</head>
+<body style="visibility:hidden;">
+
+    <div class="register-wrapper">
+        <div class="register-logo">
+            <img src="images/CloEx.png" alt="ColEx Logo">
+        </div>
+        <h1 class="page-title">Complete Your Profile</h1>
+        <p class="page-subtitle">Add your details so we can serve you better</p>
+
+        <div class="setup-banner">
+            <span class="setup-banner-icon">ℹ️</span>
+            <div>
+                <strong>Your account needs a profile</strong>
+                Fill in the fields below to complete your account setup.
+            </div>
+        </div>
+
+        <!-- Personal Info -->
+        <p class="section-label">Personal Info</p>
+        <div class="field-group">
+            <div class="form-field">
+                <label for="first-name">First Name <span style="color:#e53935;">*</span></label>
+                <input type="text" id="first-name" placeholder="Jane" required>
+            </div>
+            <div class="form-field">
+                <label for="last-name">Last Name <span style="color:#e53935;">*</span></label>
+                <input type="text" id="last-name" placeholder="Doe" required>
+            </div>
+        </div>
+        <div class="form-field">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" placeholder="+234 800 000 0000">
+        </div>
+
+        <!-- Account -->
+        <p class="section-label">Account</p>
+        <div class="form-field">
+            <label for="email-display">Email Address <span style="font-size:11px;color:#aaa;font-weight:400;">(cannot be changed)</span></label>
+            <input type="email" id="email-display" disabled style="background:#f0f0f0;color:#aaa;cursor:default;">
+        </div>
+
+        <button id="submit" type="button">Save & Continue</button>
+        <span class="skip-link" onclick="window.location.href='customer.html'">Skip for now →</span>
+    </div>
+
+    <script src="notifications.js"></script>
+    <script type="module" src="setup-profile.js"></script>
+</body>
+</html>

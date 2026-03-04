@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColEx - My Profile</title>
+    <link rel="icon" type="image/x-icon" href="images/CloEx.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+          crossorigin="anonymous">
+    <link rel="stylesheet" href="profile.css">
+
+    <!-- Auth guard: redirect if not logged in -->
+    <script src="customer-auth-guard.js" type="module"></script>
+</head>
+<body style="visibility:hidden;">
+
+    <!-- ── Navigation ── -->
+    <nav class="d-flex justify-content-between px-5 py-3 align-items-center shadow">
+        <div class="navlogo" onclick="window.location.href='customer.html'" style="cursor:pointer;">
+            <img src="images/CloEx.png" alt="ColEx Logo" width="60px">
+        </div>
+        <div class="nav-actions">
+            <button class="btn-back" onclick="window.location.href='customer.html'">← Shop</button>
+            <button class="logout-button" type="button">Logout</button>
+        </div>
+    </nav>
+
+    <!-- ── Page Body ── -->
+    <main class="profile-main">
+
+        <!-- LEFT: Avatar + quick info -->
+        <aside class="profile-sidebar">
+            <div class="avatar-wrap">
+                <img id="avatar-display"
+                     class="avatar-img"
+                     src="https://ui-avatars.com/api/?name=You&background=111&color=fff&size=120"
+                     alt="Profile Photo">
+                <button class="avatar-edit-btn" onclick="document.getElementById('avatar-input').click()" title="Change photo">✎</button>
+                <input type="file" id="avatar-input" accept="image/*" style="display:none;">
+            </div>
+
+            <h2 id="sidebar-name" class="sidebar-name">Loading…</h2>
+            <p id="sidebar-email" class="sidebar-email">—</p>
+
+            <div class="sidebar-badges">
+                <span class="badge-item" id="badge-address">📍 No address</span>
+                <span class="badge-item" id="badge-phone">📞 No phone</span>
+            </div>
+
+            <button class="btn-save-all" onclick="saveProfile()">Save Changes</button>
+            <button class="btn-logout-side logout-button" type="button">Logout</button>
+        </aside>
+
+        <!-- RIGHT: Edit form -->
+        <section class="profile-form-section">
+
+            <div class="form-card">
+                <h3 class="form-card-title">Personal Information</h3>
+
+                <div class="field-row">
+                    <div class="form-field">
+                        <label for="first-name">First Name</label>
+                        <input type="text" id="first-name" placeholder="Jane">
+                    </div>
+                    <div class="form-field">
+                        <label for="last-name">Last Name</label>
+                        <input type="text" id="last-name" placeholder="Doe">
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <label for="phone">Phone Number</label>
+                    <input type="tel" id="phone" placeholder="+234 800 000 0000">
+                </div>
+
+                <div class="form-field">
+                    <label for="email-display">Email Address <span class="label-note">(cannot be changed)</span></label>
+                    <input type="email" id="email-display" disabled>
+                </div>
+            </div>
+
+            <!-- Purchase History (read-only) -->
+            <div class="form-card">
+                <h3 class="form-card-title">Recent Purchases</h3>
+                <div id="purchase-list">
+                    <p class="empty-state">Loading purchase history…</p>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- QR Code library for re-showing purchase QR codes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="notifications.js"></script>
+    <!-- Fix #2: load shared avatar utility so profile.js can call
+         window.resizeImageToBase64 without duplicating it -->
+    <script src="avatar-upload.js"></script>
+    <script type="module" src="profile.js"></script>
+
+
+</body>
+</html>
