@@ -6,6 +6,17 @@ import { storeCol, storeDoc } from "./firebase-config.js";
 const app = getApps().find(a => a.name === 'cardstorage') || getApps()[0];
 const db  = getFirestore(app);
 
+/* Security: escape HTML to prevent XSS when injecting purchase/item data */
+function escapeHtml(str) {
+    if (!str && str !== 0) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // Resolve store from cashier profile (injected by admin-auth-guard) or session
 function getStoreId() {
     return (window.cashierStoreId) || sessionStorage.getItem('cashierStoreId') || 'store1';
@@ -91,7 +102,7 @@ async function verifyPurchase(purchaseId) {
       resultDiv.className = 'verification-result error';
       resultDiv.innerHTML = `
         <div class="result-header error-header"><h3> Invalid Purchase ID</h3></div>
-        <p>No purchase found with ID: <strong>${purchaseId}</strong></p>
+        <p>No purchase found with ID: <strong>${escapeHtml(purchaseId)}</strong></p>
         <p class="help-text">Please check the ID and try again.</p>
         <button onclick="clearVerification()" class="btn-clear-result">Clear</button>`;
       return;
@@ -104,10 +115,10 @@ async function verifyPurchase(purchaseId) {
         <p>This purchase was already verified on:</p>
         <p class="verified-date">${new Date(purchase.verifiedDate).toLocaleString()}</p>
         <div class="purchase-details">
-          <p><strong>Purchase ID:</strong> ${purchase.id}</p>
+          <p><strong>Purchase ID:</strong> ${escapeHtml(purchase.id)}</p>
           <p><strong>Total:</strong> ₦${purchase.total.toFixed(2)}</p>
           <p><strong>Items:</strong></p>
-          <ul>${purchase.items.map(i => `<li>${i.quantity}x ${i.name} @ ₦${i.price}</li>`).join('')}</ul>
+          <ul>${purchase.items.map(i => `<li>${escapeHtml(String(i.quantity))}x ${escapeHtml(i.name)} @ ₦${Number(i.price).toFixed(2)}</li>`).join('')}</ul>
         </div>`;
       return;
     }
@@ -133,19 +144,19 @@ async function verifyPurchase(purchaseId) {
     resultDiv.innerHTML = `
       <div class="result-header success-header"><h3> Purchase Verified Successfully!</h3></div>
       <div class="purchase-details">
-        <p><strong>Purchase ID:</strong> ${purchase.id}</p>
+        <p><strong>Purchase ID:</strong> ${escapeHtml(purchase.id)}</p>
         <p><strong>Date:</strong> ${new Date(purchase.date).toLocaleString()}</p>
         <p><strong>Total Amount:</strong> <span class="amount">₦${purchase.total.toFixed(2)}</span></p>
         <div class="items-purchased">
           <p><strong>Items:</strong></p>
           <ul class="purchased-items">
             ${purchase.items.map(item => `
-              <li><span class="item-qty">${item.quantity}x</span>
-                <span class="item-name">${item.name}</span>
+              <li><span class="item-qty">${escapeHtml(String(item.quantity))}x</span>
+                <span class="item-name">${escapeHtml(item.name)}</span>
                 <span class="item-price">₦${Number(item.price).toFixed(2)}</span></li>`).join('')}
           </ul>
         </div>
-        <button onclick="printReceipt('${purchase.id}')" class="btn-print">Print Receipt</button>
+        <button onclick="printReceipt('${escapeHtml(purchase.id)}')" class="btn-print">Print Receipt</button>
         <button onclick="clearVerification()" class="btn-clear-result">Clear</button>
       </div>`;
 
@@ -181,7 +192,7 @@ window.printReceipt = async function(purchaseId) {
   const customerEmail = purchase.email         || '—';
 
   const printWindow = window.open('', '', 'width=800,height=700');
-  printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${purchase.id}</title>
+  printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${escapeHtml(purchase.id)}</title>
     <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:28px;max-width:620px;margin:0 auto}
     .rh{text-align:center;border-bottom:2px solid #111;padding-bottom:18px;margin-bottom:20px}
     .rh h1{font-size:28px;font-weight:900}.rh h2{font-size:15px;color:#555;margin-top:4px}
@@ -194,18 +205,18 @@ window.printReceipt = async function(purchaseId) {
     </style></head><body>
     <div class="rh"><h1>ColEx</h1><h2>Purchase Receipt</h2></div>
     <div class="sec"><div class="sec-t">Customer</div>
-      <div class="dr"><span>Name</span><span>${customerName}</span></div>
-      <div class="dr"><span>Phone</span><span>${customerPhone}</span></div>
-      <div class="dr"><span>Email</span><span>${customerEmail}</span></div></div>
+      <div class="dr"><span>Name</span><span>${escapeHtml(customerName)}</span></div>
+      <div class="dr"><span>Phone</span><span>${escapeHtml(customerPhone)}</span></div>
+      <div class="dr"><span>Email</span><span>${escapeHtml(customerEmail)}</span></div></div>
     <div class="sec"><div class="sec-t">Order Info</div>
-      <div class="dr"><span>Purchase ID</span><span style="font-family:monospace">${purchase.id}</span></div>
+      <div class="dr"><span>Purchase ID</span><span style="font-family:monospace">${escapeHtml(purchase.id)}</span></div>
       <div class="dr"><span>Date</span><span>${new Date(purchase.date).toLocaleString()}</span></div>
-      <div class="dr"><span>Reference</span><span style="font-family:monospace">${purchase.reference}</span></div>
+      <div class="dr"><span>Reference</span><span style="font-family:monospace">${escapeHtml(purchase.reference || '—')}</span></div>
       ${purchase.verified ? `<div class="dr"><span>Verified</span><span>${new Date(purchase.verifiedDate).toLocaleString()}</span></div>` : ''}
     </div>
     <div class="sec"><div class="sec-t">Items</div>
       <table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
-        ${purchase.items.map(i => `<tr><td>${i.name}</td><td>${i.quantity}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
+        ${purchase.items.map(i => `<tr><td>${escapeHtml(i.name)}</td><td>${escapeHtml(String(i.quantity))}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
       </tbody></table>
       <table style="margin-top:8px"><tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
         <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>

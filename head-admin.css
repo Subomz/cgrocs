@@ -90,6 +90,9 @@ body {
   white-space: nowrap;
 }
 .btn-logout:hover { background: rgba(255,255,255,.2); color: white; }
+/* Alias — auth guard wires events on .logout-button */
+.logout-button { }
+.logout-button:hover { background: rgba(255,255,255,.2) !important; color: white !important; }
 
 .nav-hamburger {
   display: none; background: none; border: 1.5px solid rgba(255,255,255,.2);
@@ -311,15 +314,15 @@ body {
 }
 .field input, .field select {
   width: 100%; padding: 11px 14px;
-  border: 1.5px solid var(--border); border-radius: 9px;
+  border: 1.5px solid var(--border); border-radius: 8px;
   font-size: 14px; font-family: inherit; color: var(--ink);
   background: white; outline: none; transition: border-color .18s;
 }
-.field input:focus, .field select:focus { border-color: var(--ink); }
+.field input:focus, .field select:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .btn-primary {
-  width: 100%; padding: 13px; border: none; border-radius: 9px;
+  width: 100%; padding: 13px; border: none; border-radius: 8px;
   background: var(--ink); color: white;
   font-size: 15px; font-weight: 700; font-family: inherit;
   cursor: pointer; transition: opacity .15s; margin-top: 8px;

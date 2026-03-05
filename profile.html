@@ -91,6 +91,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="notifications.js"></script>
     <script src="avatar-upload.js"></script>
+    <script>
+        // Wire up avatar file input once DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof initAvatarUpload === 'function') {
+                initAvatarUpload('avatar-input', 'avatar-display');
+            }
+        });
+    </script>
     <script type="module" src="profile.js"></script>
 </body>
 </html>

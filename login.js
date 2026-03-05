@@ -299,6 +299,18 @@ window.openResetModal = function() {
             }
         }
 
+        // Try head admin project as final fallback
+        if (!sent && !lastErr) {
+            try {
+                await sendPasswordResetEmail(headAdminAuth, resetEmail);
+                sent = true;
+            } catch (e) {
+                if (e.code !== 'auth/user-not-found') {
+                    lastErr = e;
+                }
+            }
+        }
+
         if (lastErr) {
             // Hard error (network, invalid email, rate limit)
             sendBtn.disabled    = false;

@@ -67,6 +67,10 @@ onAuthStateChanged(adminAuth, async (user) => {
   // Inject store filter pills for multi-store general admin
   injectStoreTabs();
 
+  // Lock the "Assigned Store" dropdown to only the stores this admin manages.
+  // A store-head admin must not be able to create cashiers for another store.
+  lockStoreDropdown();
+
   await loadCashierNameMap();
   startPurchasesListeners();
   startProductLogsListener();
@@ -90,6 +94,32 @@ function injectStoreTabs() {
     <button class="filter-pill active" data-sf="all"    onclick="setStoreFilter(this)">All Stores</button>
     <button class="filter-pill"        data-sf="store1" onclick="setStoreFilter(this)">${STORE_LABELS['store1']}</button>
     <button class="filter-pill"        data-sf="store2" onclick="setStoreFilter(this)">${STORE_LABELS['store2']}</button>`;
+}
+
+// Restrict the "Assigned Store" <select> in the Create Account form so that
+// a store-head admin only sees (and can only submit) their own store.
+// A general admin keeps both options visible.
+function lockStoreDropdown() {
+  const sel = document.getElementById('new-store');
+  if (!sel) return;
+
+  if (_currentRole === 'general') {
+    // General admin: make sure both options are present and enabled
+    sel.querySelectorAll('option').forEach(o => { o.disabled = false; });
+    return;
+  }
+
+  // Store-head: remove options that don't belong to this admin's store,
+  // then disable the dropdown so it can't be changed via DevTools either.
+  const allowedStore = _adminStores[0];
+  Array.from(sel.options).forEach(o => {
+    if (o.value !== allowedStore) {
+      o.remove();
+    }
+  });
+  sel.value = allowedStore;
+  sel.disabled = true;
+  sel.title = 'You can only create accounts for your assigned store.';
 }
 
 window.setStoreFilter = function(btn) {
@@ -409,6 +439,15 @@ window.createAccount = async function() {
   if (!email)              { notify.error('Please enter an email address.');    return; }
   if (!password)           { notify.error('Please enter a password.');          return; }
   if (password.length < 6) { notify.error('Password must be at least 6 characters.'); return; }
+
+  // Security: enforce that the chosen store is one this admin is allowed to manage.
+  // This catches both UI tampering (re-enabled disabled <select>) and direct
+  // JS calls with an out-of-scope storeId.
+  if (!_adminStores.includes(storeId)) {
+    notify.error('You are not authorised to create accounts for that store.');
+    console.warn(`createAccount blocked: admin manages ${_adminStores}, attempted storeId "${storeId}"`);
+    return;
+  }
 
   const btn = document.getElementById('btn-create-account');
   btn.disabled = true; btn.textContent = 'Creating…';

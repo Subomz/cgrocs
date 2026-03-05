@@ -124,13 +124,27 @@
 
     <script type="module">
         import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
         import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-        import { customerConfig } from "./firebase-config.js";
+        import { customerConfig, storeCol } from "./firebase-config.js";
 
         const existing = getApps().find(a => a.name === 'cardstorage');
         const app = existing || initializeApp(customerConfig, 'cardstorage');
+        const auth = getAuth(app);
         const db  = getFirestore(app);
+
+        /* Logout handler — called by the nav logout button */
+        window.checkLogout = function() {
+            sessionStorage.setItem('intentional_logout', 'true');
+            signOut(auth).then(() => {
+                sessionStorage.clear();
+                window.location.href = 'home.html';
+            }).catch(e => {
+                console.error('Logout error:', e);
+                sessionStorage.removeItem('intentional_logout');
+                notify.error('Logout failed. Please try again.');
+            });
+        };
 
         /* Security fix: scope query to current user instead of reading all purchases */
         let _allOrders    = [];
@@ -168,9 +182,10 @@
             }
             if (listEl) listEl.innerHTML = '<p style="text-align:center;padding:30px;color:#aaa;">Loading...</p>';
 
-            /* Bug fix: query scoped to the current user — previously read all purchases */
+            /* Bug fix: use store-aware path stores/{storeId}/purchases, scoped to current user */
+            const storeId = sessionStorage.getItem('selectedStore') || 'store1';
             _ordersUnsub = onSnapshot(
-                query(collection(db, 'purchases'), where('uid', '==', uid)),
+                query(collection(db, storeCol(storeId, 'purchases')), where('uid', '==', uid)),
                 (snap) => {
                     _allOrders = [];
                     snap.forEach(d => _allOrders.push({ ...d.data(), _docId: d.id }));

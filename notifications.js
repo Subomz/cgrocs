@@ -125,15 +125,16 @@ if (!document.getElementById('notification-styles')) {
       align-items: center;
       gap: 12px;
       background: white;
-      padding: 16px 20px;
+      padding: 14px 18px;
       border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
       border-left: 4px solid #000;
       opacity: 0;
       transform: translateX(400px);
       transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
       pointer-events: all;
       min-width: 300px;
+      font-family: 'DM Sans', 'Segoe UI', Tahoma, sans-serif;
     }
 
     .notification.show { opacity: 1; transform: translateX(0); }
@@ -185,6 +186,7 @@ if (!document.getElementById('notification-styles')) {
       padding: 32px; max-width: 440px; width: 90%;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       transform: scale(0.9); transition: transform 0.3s; text-align: center;
+      font-family: 'DM Sans', 'Segoe UI', Tahoma, sans-serif;
     }
     .confirm-modal.show .confirm-modal-content { transform: scale(1); }
 
