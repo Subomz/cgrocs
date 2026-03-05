@@ -1,7 +1,7 @@
 // head-admin.js — Per-store & General Head Admin dashboard (multi-store)
 import { initializeApp, getApps }              from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, onSnapshot, getDocs, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { headAdminConfig, adminConfig, customerConfig, storeCol, storeDoc, STORE_IDS, STORE_LABELS } from "./firebase-config.js";
 
 //  Firebase 
@@ -337,13 +337,20 @@ async function loadAccounts() {
       const isHead = a.role === 'Head Cashier' || a.role === 'Supervisor';
       const storePill = _currentRole === 'general' && a.storeId
         ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:6px;">${storeLabel(a.storeId)}</span>` : '';
+      // Store-heads can only delete cashiers from their own store
+      const canDelete = _currentRole === 'general' || _adminStores.includes(a.storeId || 'store1');
+      const safeUid   = (a.uid || '').replace(/'/g, "\\'");
+      const safeName  = (a.name || 'this account').replace(/'/g, "\\'");
       return `
-      <div class="account-row">
+      <div class="account-row" id="acc-row-${a.uid}">
         <div class="acc-info">
           <div class="acc-name">${a.name||'—'}${storePill}</div>
           <div class="acc-email">${a.email||'—'}</div>
         </div>
-        <span class="acc-role-badge${isHead?' head':''}">${a.role||'Cashier'}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <span class="acc-role-badge${isHead?' head':''}">${a.role||'Cashier'}</span>
+          ${canDelete ? `<button class="btn-delete-acc" onclick="deleteAccount('${safeUid}','${safeName}')" title="Delete account">&#128465;</button>` : ''}
+        </div>
       </div>`;
     }).join('');
   } catch (e) {
@@ -352,6 +359,44 @@ async function loadAccounts() {
   }
 }
 
+//  Delete Account 
+window.deleteAccount = function(uid, name) {
+  if (!uid) { notify.error('Cannot delete: account ID missing.'); return; }
+
+  notify.confirm(`Delete account for "${name}"? This removes their login from the system and cannot be undone.`, async () => {
+    // Optimistically remove the row from the UI immediately
+    const row = document.getElementById(`acc-row-${uid}`);
+    if (row) {
+      row.style.opacity = '0.4';
+      row.style.pointerEvents = 'none';
+    }
+
+    try {
+      // Delete the Firestore cashier profile — this removes their access record.
+      // Note: Firebase Auth user deletion requires the Admin SDK (server-side).
+      // Deleting the Firestore doc is sufficient to block login since the
+      // auth guard checks cashierDb for a valid profile on every login attempt.
+      await deleteDoc(doc(cashierDb, 'cashiers', uid));
+
+      // Remove from the cashier name map so stale names don't linger
+      const deletedEmail = Object.keys(_cashierNameMap).find(k => _cashierNameMap[k] === name);
+      if (deletedEmail) delete _cashierNameMap[deletedEmail];
+
+      notify.success(`Account for "${name}" deleted successfully.`);
+
+      // Refresh the accounts list and cashier name map
+      await loadCashierNameMap();
+      loadAccounts();
+    } catch (e) {
+      console.error('Delete account error:', e);
+      notify.error('Could not delete account: ' + e.message);
+      // Restore the row if deletion failed
+      if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+    }
+  });
+};
+
+//  Create Account 
 window.createAccount = async function() {
   const first    = document.getElementById('new-first').value.trim();
   const last     = document.getElementById('new-last').value.trim();

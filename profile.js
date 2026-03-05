@@ -3,7 +3,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs }
                                           from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 // Fix #1: import from the single source of truth instead of copy-pasting the config
-import { customerConfig } from "./firebase-config.js";
+import { customerConfig, storeCol } from "./firebase-config.js";
 
 const APP_NAME = 'cardstorage';
 let app;
@@ -192,10 +192,9 @@ async function loadPurchaseHistory(uid) {
     try {
         // Firestore is the source of truth — fetch fresh data so verified
         // status updated by the admin panel shows immediately.
-        // Fix #3 (localStorage merge removed): only show Firestore purchases.
-        // localStorage merging was unreliable and added complexity without
-        // benefit since Firestore is already required for the app to function.
-        const snap = await getDocs(collection(db, "purchases"));
+        // Purchases are stored per-store under stores/{storeId}/purchases
+        const storeId = sessionStorage.getItem('selectedStore') || 'store1';
+        const snap = await getDocs(collection(db, storeCol(storeId, 'purchases')));
         const purchases = [];
         snap.forEach(d => {
             const data = d.data();
@@ -220,9 +219,9 @@ async function loadPurchaseHistory(uid) {
                 <button class="ph-filt-btn" data-f="verified"  onclick="window._filterPurchases(this)">Collected</button>
             </div>
             <style>
-                .ph-filt-btn{padding:6px 14px;border-radius:20px;border:1.5px solid #ddd;background:white;color:#555;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
-                .ph-filt-btn:hover{border-color:#111;color:#111;}
-                .ph-filt-btn.active{background:#111;color:white;border-color:#111;}
+                .ph-filt-btn{padding:6px 14px;border-radius:20px;border:1.5px solid #e4e4e7;background:white;color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans','Segoe UI',sans-serif;transition:all .15s;}
+                .ph-filt-btn:hover{border-color:#0a0a0a;color:#0a0a0a;}
+                .ph-filt-btn.active{background:#0a0a0a;color:white;border-color:#0a0a0a;}
             </style>`);
         }
 
@@ -331,21 +330,21 @@ window._reshowQR = function(purchaseId, itemsText, total) {
     modal.id = 'profile-qr-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
     modal.innerHTML = `
-        <div style="background:white;border-radius:16px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25);font-family:'Segoe UI',sans-serif;overflow:hidden;">
-            <div style="background:#111;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="background:white;border-radius:16px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+            <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
                 <h2 style="margin:0;font-size:18px;font-weight:700;">Purchase QR Code</h2>
                 <button onclick="document.getElementById('profile-qr-modal').remove()" style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
             </div>
             <div style="padding:24px;text-align:center;">
-                <p style="font-size:12px;color:#888;margin-bottom:4px;">Purchase ID</p>
-                <p style="font-family:'Courier New',monospace;font-size:14px;font-weight:700;color:#111;background:#f5f5f5;padding:10px;border-radius:8px;word-break:break-all;margin-bottom:16px;">${purchaseId}</p>
-                <p style="font-size:13px;color:#555;margin-bottom:16px;">${itemsText}</p>
-                <p style="font-size:16px;font-weight:700;color:#111;margin-bottom:20px;">₦${Number(total).toLocaleString(undefined,{minimumFractionDigits:2})}</p>
+                <p style="font-size:12px;color:#6b7280;margin-bottom:4px;">Purchase ID</p>
+                <p style="font-family:'Courier New',monospace;font-size:14px;font-weight:700;color:#1a1a1a;background:#f5f5f5;padding:10px;border-radius:8px;word-break:break-all;margin-bottom:16px;">${purchaseId}</p>
+                <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">${itemsText}</p>
+                <p style="font-size:16px;font-weight:700;color:#1a1a1a;margin-bottom:20px;">₦${Number(total).toLocaleString(undefined,{minimumFractionDigits:2})}</p>
                 <div id="profile-qrcode" style="display:inline-block;margin-bottom:12px;"></div>
-                <p style="font-size:12px;color:#aaa;font-style:italic;">Show this to the cashier for pickup verification</p>
+                <p style="font-size:12px;color:#9ca3af;font-style:italic;">Show this to the cashier for pickup verification</p>
                 <div style="display:flex;gap:10px;margin-top:20px;">
-                    <button onclick="window._downloadProfileQR('${purchaseId}')" style="flex:1;padding:11px;background:white;color:#111;border:1.5px solid #111;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Download</button>
-                    <button onclick="document.getElementById('profile-qr-modal').remove()" style="flex:1;padding:11px;background:#111;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Done</button>
+                    <button onclick="window._downloadProfileQR('${purchaseId}')" style="flex:1;padding:11px;background:white;color:#1a1a1a;border:1.5px solid #111;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Download</button>
+                    <button onclick="document.getElementById('profile-qr-modal').remove()" style="flex:1;padding:11px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Done</button>
                 </div>
             </div>
         </div>`;
@@ -365,7 +364,7 @@ window._reshowQR = function(purchaseId, itemsText, total) {
             });
         } else {
             document.getElementById('profile-qrcode').innerHTML =
-                '<p style="color:#aaa;font-size:13px;">QR library not loaded.<br>Use the Purchase ID above.</p>';
+                '<p style="color:#9ca3af;font-size:13px;">QR library not loaded.<br>Use the Purchase ID above.</p>';
         }
     }, 50);
 };

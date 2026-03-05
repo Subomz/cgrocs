@@ -33,6 +33,17 @@ function resolveStoreId() {
 // Expose so other modules can read the current store
 window.getStoreId = () => resolveStoreId();
 
+//  Security: escape HTML to prevent XSS 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 const DEFAULT_PRODUCTS = [
   { name: "Luxury Watch",     stock: 20, price: 15000, category: "Accessories", img: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=200&fit=crop" },
   { name: "Designer Bag",     stock: 15, price: 25000, category: "Bags",        img: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=300&h=200&fit=crop" },
@@ -140,21 +151,21 @@ window.openAddCategoryModal = function() {
   modal.id = 'add-cat-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:400px;padding:28px 24px 22px;box-shadow:0 8px 40px rgba(0,0,0,0.18);font-family:'Segoe UI',sans-serif;">
-      <h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#111;">Manage Categories</h3>
-      <p style="margin:0 0 16px;font-size:13px;color:#888;">Categories appear as filter pills on the shop page.</p>
+    <div style="background:white;border-radius:16px;width:100%;max-width:400px;padding:28px 24px 22px;box-shadow:0 8px 40px rgba(0,0,0,0.18);font-family:'DM Sans','Segoe UI',sans-serif;">
+      <h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#1a1a1a;">Manage Categories</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:#6b7280;">Categories appear as filter pills on the shop page.</p>
       <div style="display:flex;gap:8px;margin-bottom:18px;">
         <input id="new-cat-input" type="text" placeholder="New category name…"
-          style="flex:1;padding:10px 13px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;outline:none;"
+          style="flex:1;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;"
           onfocus="this.style.borderColor='#111'" onblur="this.style.borderColor='#ddd'"
           onkeydown="if(event.key==='Enter')window.confirmAddCategory()">
         <button onclick="window.confirmAddCategory()"
-          style="padding:10px 18px;border:none;background:#111;color:white;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Add</button>
+          style="padding:10px 18px;border:none;background:#0a0a0a;color:white;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Add</button>
       </div>
       <p style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px;">Existing</p>
       <div id="existing-cats-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;margin-bottom:18px;"></div>
       <button onclick="document.getElementById('add-cat-modal').remove()"
-        style="width:100%;padding:11px;border:1.5px solid #ddd;background:white;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>
+        style="width:100%;padding:11px;border:1.5px solid #e4e4e7;background:white;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -167,7 +178,7 @@ async function _refreshCatList() {
   const cats = await getAllCategories();
   if (cats.length === 0) { el.innerHTML = '<span style="font-size:13px;color:#bbb;">None yet</span>'; return; }
   el.innerHTML = cats.map(c => `
-    <span style="display:inline-flex;align-items:center;gap:4px;background:#f5f5f5;border-radius:20px;padding:5px 10px 5px 13px;font-size:13px;font-weight:600;color:#111;">
+    <span style="display:inline-flex;align-items:center;gap:4px;background:#f4f4f5;border-radius:20px;padding:5px 10px 5px 13px;font-size:13px;font-weight:600;color:#1a1a1a;">
       ${c}
       <button onclick="window.deleteCategory('${c.replace(/'/g,"\\'")}')"
         style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#bbb;padding:0 2px;" title="Remove">×</button>
@@ -241,7 +252,7 @@ function renderCardsAdmin() {
   const container = document.getElementById('product-container-admin'); if (!container) return;
   _buildAdminCategoryBar();
   if (!products || products.length === 0) {
-    container.innerHTML = '<p style="text-align:center;padding:40px;color:#666;">No products. Add your first!</p>'; return;
+    container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products. Add your first!</p>'; return;
   }
   const query    = _adminSearchQuery.trim().toLowerCase();
   const filtered = products.map((p, index) => ({ p, index })).filter(({ p }) => {
@@ -256,14 +267,17 @@ function renderCardsAdmin() {
     const isLow = p.stock > 0 && p.stock <= LOW_STOCK, isOut = p.stock <= 0;
     const badge = isOut ? `<span class="admin-stock-badge badge-out">OUT OF STOCK</span>`
                 : isLow ? `<span class="admin-stock-badge badge-low"> Low Stock</span>` : '';
+    const safeName = escapeHtml(p.name);
+    const safeCat  = escapeHtml(p.category);
+    const safeDesc = escapeHtml(p.description);
     return `
     <div class="card ${isLow || isOut ? 'card-stock-warn' : ''}">
       ${badge}
-      <img src="${p.img || 'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${p.name}"
+      <img src="${p.img || 'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${safeName}"
            onerror="this.src='https://placehold.co/400x300/f5f5f5/999?text=No+Image'">
-      ${p.category ? `<span class="admin-card-category">${p.category}</span>` : ''}
-      <h4>${p.name}</h4>
-      ${p.description ? `<p class="card-description">${p.description}</p>` : '<p class="card-description card-no-desc">No description</p>'}
+      ${p.category ? `<span class="admin-card-category">${safeCat}</span>` : ''}
+      <h4>${safeName}</h4>
+      ${p.description ? `<p class="card-description">${safeDesc}</p>` : '<p class="card-description card-no-desc">No description</p>'}
       <p>₦${p.price.toLocaleString()}</p>
       <p class="stock-label ${isOut ? 'out-of-stock' : isLow ? 'low-stock-warn' : ''}">${isOut ? 'Out of Stock' : `In Stock: ${p.stock}`}</p>
       <button class="btn-edit" onclick="editProduct(${index})">Edit</button>
@@ -296,7 +310,7 @@ window.clearAdminSearch = function() {
 function renderCardsCustomer() {
   const container = document.getElementById('product-container-customer'); if (!container) return;
   if (!products || products.length === 0) {
-    container.innerHTML = '<p style="text-align:center;padding:40px;color:#666;">No products available.</p>'; return;
+    container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products available.</p>'; return;
   }
   _buildCategoryBar();
   const query    = _searchQuery.trim().toLowerCase();
@@ -306,13 +320,17 @@ function renderCardsCustomer() {
     return matchCat && matchText;
   });
   const noRes = document.getElementById('no-results'); if (noRes) noRes.style.display = filtered.length === 0 ? 'block' : 'none';
-  container.innerHTML = filtered.map(({ p, index }) => `
+  container.innerHTML = filtered.map(({ p, index }) => {
+    const safeName = escapeHtml(p.name);
+    const safeCat  = escapeHtml(p.category);
+    const safeDesc = escapeHtml(p.description);
+    return `
     <div class="card">
-      <img src="${p.img || 'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${p.name}"
+      <img src="${p.img || 'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${safeName}"
            onerror="this.src='https://placehold.co/400x300/f5f5f5/999?text=No+Image'">
-      ${p.category ? `<span class="card-category-label">${p.category}</span>` : ''}
-      <h4>${p.name}</h4>
-      ${p.description ? `<p class="card-description">${p.description}</p>` : '<p class="card-description card-no-desc">No description</p>'}
+      ${p.category ? `<span class="card-category-label">${safeCat}</span>` : ''}
+      <h4>${safeName}</h4>
+      ${p.description ? `<p class="card-description">${safeDesc}</p>` : '<p class="card-description card-no-desc">No description</p>'}
       <p>₦${p.price.toLocaleString()}</p>
       <p class="stock-label ${p.stock<=0?'out-of-stock':''}">${p.stock>0?`In Stock: ${p.stock}`:'Out of Stock'}</p>
       <div class="qty-selector">
@@ -322,7 +340,7 @@ function renderCardsCustomer() {
       </div>
       <button class="btn-buy" onclick="addToCart(${index})" ${p.stock<=0?'disabled':''}>${p.stock>0?'Add to Cart':'Sold Out'}</button>
     </div>
-  `).join('');
+  `}).join('');
 }
 function _buildCategoryBar() {
   const bar = document.getElementById('category-bar'); if (!bar) return;
@@ -349,7 +367,7 @@ window.clearSearch = function() {
 function renderCardsHome() {
   const container = document.getElementById('product-container-home'); if (!container) return;
   if (!products || products.length === 0) {
-    container.innerHTML = '<p style="text-align:center;padding:40px;color:#666;">No products available.</p>'; return;
+    container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products available.</p>'; return;
   }
   container.innerHTML = products.map((p,i) => `
     <div class="card">
@@ -453,13 +471,13 @@ function showLogoutWarning(n) {
   const ex=document.getElementById('logout-warning-modal'); if(ex) ex.remove();
   const modal=document.createElement('div'); modal.id='logout-warning-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
-  modal.innerHTML=`<div style="background:white;border-radius:16px;padding:32px 28px 24px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.18);font-family:'Segoe UI',sans-serif;text-align:center;">
+  modal.innerHTML=`<div style="background:white;border-radius:16px;padding:32px 28px 24px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.18);font-family:'DM Sans','Segoe UI',sans-serif;text-align:center;">
     <div style="font-size:40px;margin-bottom:12px;"></div>
-    <h2 style="font-size:18px;font-weight:700;color:#111;margin-bottom:10px;">Your cart will be cleared</h2>
-    <p style="font-size:14px;color:#666;margin-bottom:24px;line-height:1.5;">You have <strong>${n} item${n!==1?'s':''}</strong> in your cart. Logging out will clear it.</p>
+    <h2 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:10px;">Your cart will be cleared</h2>
+    <p style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.5;">You have <strong>${n} item${n!==1?'s':''}</strong> in your cart. Logging out will clear it.</p>
     <div style="display:flex;gap:10px;">
-      <button id="lw-stay"    style="flex:1;padding:12px;background:white;color:#111;border:1.5px solid #ddd;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Stay</button>
-      <button id="lw-confirm" style="flex:1;padding:12px;background:#111;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Logout anyway</button>
+      <button id="lw-stay"    style="flex:1;padding:12px;background:white;color:#1a1a1a;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Stay</button>
+      <button id="lw-confirm" style="flex:1;padding:12px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Logout anyway</button>
     </div></div>`;
   document.body.appendChild(modal);
   modal.querySelector('#lw-stay').onclick=()=>modal.remove();

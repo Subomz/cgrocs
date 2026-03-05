@@ -474,8 +474,9 @@ window._paystackCallback = function(response) {
     }
   }
 
-  // Persist updated products locally
-  localStorage.setItem('myProducts', JSON.stringify(products));
+  // Persist updated products locally using store-aware key
+  const activeStore = getActiveStore();
+  localStorage.setItem(`myProducts_${activeStore}`, JSON.stringify(products));
   window.products = products;
 
   // Use values already destructured from payload above
@@ -669,7 +670,7 @@ function updateCartDisplay() {
               <button class="cart-qty-btn" onclick="changeCartQty(${index}, -1)">−</button>
               <span class="cart-qty-num">${item.quantity}</span>
               <button class="cart-qty-btn" onclick="changeCartQty(${index}, 1)">+</button>
-              <span style="font-size:12px;color:#aaa;">× ₦${priceNum.toFixed(2)}</span>
+              <span style="font-size:12px;color:#9ca3af;">× ₦${priceNum.toFixed(2)}</span>
             </div>
           </div>
           <div class="cart-item-price" style="flex-direction:column;align-items:flex-end;gap:4px;">
