@@ -1,5 +1,6 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { customerConfig, adminConfig, headAdminConfig } from "./firebase-config.js";
 
 const customerApp = getApps().find(a => a.name === 'cardstorage')
@@ -15,9 +16,13 @@ const customerAuth  = getAuth(customerApp);
 const adminAuth     = getAuth(adminApp);
 const headAdminAuth = getAuth(headAdminApp);
 
-// ── Bug fix: also catch auth/invalid-login-credentials (Firebase v9+ with
+// Firestore instances for store validation
+const adminDb     = getFirestore(adminApp);
+const headAdminDb = getFirestore(headAdminApp);
+
+//  Bug fix: also catch auth/invalid-login-credentials (Firebase v9+ with
 //    email-enumeration protection enabled returns this instead of
-//    auth/user-not-found or auth/wrong-password) ─────────────────────────────
+//    auth/user-not-found or auth/wrong-password) 
 const PASS_THROUGH_CODES = new Set([
     'auth/invalid-credential',
     'auth/invalid-login-credentials',
@@ -25,7 +30,7 @@ const PASS_THROUGH_CODES = new Set([
     'auth/wrong-password'
 ]);
 
-// ── Enter key submits the form ────────────────────────────────────────────────
+//  Enter key submits the form 
 ['email', 'password'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('keydown', e => {
@@ -33,7 +38,7 @@ const PASS_THROUGH_CODES = new Set([
     });
 });
 
-// ── Login ─────────────────────────────────────────────────────────────────────
+//  Login 
 document.getElementById("submit").addEventListener("click", async function(e) {
     e.preventDefault();
 
@@ -49,11 +54,17 @@ document.getElementById("submit").addEventListener("click", async function(e) {
     btn.disabled    = true;
     btn.textContent = "Signing in…";
 
-    // ── Step 1: Try customer project ──────────────────────────────────────────
+    const selectedStore = sessionStorage.getItem('selectedStore');
+
+    //  Step 1: Try customer project 
     try {
         const cred = await signInWithEmailAndPassword(customerAuth, email, password);
         console.log("Customer login successful:", cred.user.email);
         notify.success("Login successful!");
+        // Ensure a store is selected
+        if (!selectedStore) {
+            sessionStorage.setItem('selectedStore', 'store1');
+        }
         setTimeout(() => { window.location.href = "customer.html"; }, 500);
         return;
     } catch (customerErr) {
@@ -65,9 +76,28 @@ document.getElementById("submit").addEventListener("click", async function(e) {
         console.log("Not a customer account, trying admin…");
     }
 
-    // ── Step 2: Try admin project ─────────────────────────────────────────────
+    //  Step 2: Try cashier (admin) project — validate store matches 
     try {
         const cred = await signInWithEmailAndPassword(adminAuth, email, password);
+        const uid  = cred.user.uid;
+
+        // Fetch cashier profile to check their assigned store
+        let cashierStore = null;
+        try {
+            const snap = await getDoc(doc(adminDb, 'cashiers', uid));
+            cashierStore = snap.exists() ? (snap.data().storeId || 'store1') : 'store1';
+        } catch (e) {
+            console.warn("Could not fetch cashier profile for store check:", e.message);
+            cashierStore = 'store1';
+        }
+
+        // If a store is selected and it doesn't match, reject
+        if (selectedStore && cashierStore !== selectedStore) {
+            notify.error("Invalid email or password.");
+            resetBtn(btn);
+            return;
+        }
+
         console.log("Admin login successful:", cred.user.email);
         notify.success("Login successful!");
         setTimeout(() => { window.location.href = "admin.html"; }, 500);
@@ -76,9 +106,32 @@ document.getElementById("submit").addEventListener("click", async function(e) {
         console.log("Admin login also failed:", adminErr.code);
     }
 
-    // ── Step 3: Try head admin project ───────────────────────────────────────
+    //  Step 3: Try head admin project — general admins bypass store check 
     try {
         const cred = await signInWithEmailAndPassword(headAdminAuth, email, password);
+        const uid  = cred.user.uid;
+
+        // Fetch role to check if general or store-head
+        let role      = 'store-head';
+        let haStoreId = 'store1';
+        try {
+            const snap = await getDoc(doc(headAdminDb, 'admins', uid));
+            if (snap.exists()) {
+                role      = snap.data().role    || 'store-head';
+                haStoreId = snap.data().storeId || 'store1';
+            }
+        } catch (e) {
+            console.warn("Could not fetch head admin role for store check:", e.message);
+        }
+
+        // General admins can log in from any store
+        // Store-head admins must match the selected store
+        if (role !== 'general' && selectedStore && haStoreId !== selectedStore) {
+            notify.error("Invalid email or password.");
+            resetBtn(btn);
+            return;
+        }
+
         console.log("Head admin login successful:", cred.user.email);
         notify.success("Login successful!");
         setTimeout(() => { window.location.href = "head-admin.html"; }, 500);
@@ -87,12 +140,12 @@ document.getElementById("submit").addEventListener("click", async function(e) {
         console.log("Head admin login also failed:", headAdminErr.code);
     }
 
-    // ── All three failed ──────────────────────────────────────────────────────
+    //  All three failed 
     notify.error("Invalid email or password.");
     resetBtn(btn);
 });
 
-// ── Password reset ────────────────────────────────────────────────────────────
+//  Password reset 
 window.openResetModal = function() {
     const existing = document.getElementById('reset-modal');
     if (existing) existing.remove();
@@ -204,7 +257,7 @@ window.openResetModal = function() {
         if (e.key === 'Enter') sendBtn.click();
     });
 
-    // ── Send the reset email ──────────────────────────────────────────────────
+    //  Send the reset email 
     // We try both Firebase projects because the user might be a customer OR an
     // admin — they land on the same login page and we don't know which project
     // their account lives in. sendPasswordResetEmail is safe to call regardless;
@@ -267,7 +320,7 @@ window.openResetModal = function() {
     setTimeout(() => emailInput.focus(), 50);
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+//  Helpers 
 function resetBtn(btn) {
     btn.disabled    = false;
     btn.textContent = "Login";

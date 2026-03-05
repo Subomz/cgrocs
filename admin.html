@@ -36,6 +36,7 @@
             <div id="cashier-info" class="nav-cashier">
                 <div id="cashier-avatar" class="nav-cashier-avatar"></div>
                 <span id="cashier-name" class="nav-cashier-name"></span>
+                <span id="nav-store-label" style="font-size:11px;font-weight:700;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.85);padding:3px 10px;border-radius:20px;margin-left:6px;"></span>
             </div>
             <button class="logout-button" type="button">Logout</button>
         </div>
@@ -53,7 +54,7 @@
         <button class="drawer-tab-btn"        onclick="switchTab('products');window.closeTabsMenu()">Manage Products</button>
     </div>
 
-    <!-- ── Dashboard Tab ── -->
+    <!--  Dashboard Tab  -->
     <div id="dashboard-tab" class="tab-content active">
         <div class="dashboard-wrap">
             <!-- Cashier Profile Card -->
@@ -77,10 +78,6 @@
                     <div class="stat-label">Pending Verification</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value" id="stat-revenue">—</div>
-                    <div class="stat-label">Revenue Today</div>
-                </div>
-                <div class="stat-card">
                     <div class="stat-value" id="stat-lowstock">—</div>
                     <div class="stat-label">Low Stock Items</div>
                 </div>
@@ -100,7 +97,7 @@
         </div>
     </div>
 
-    <!-- ── Verification Tab ── -->
+    <!--  Verification Tab  -->
     <div id="verification-tab" class="tab-content">
         <div class="verification-section">
             <h3>Verify Purchase</h3>
@@ -147,7 +144,7 @@
         </div>
     </div>
 
-    <!-- ── Products Tab ── -->
+    <!--  Products Tab  -->
     <div id="products-tab" class="tab-content">
         <div class="admin-panel" id="admin-panel">
             <h3>Add / Edit Product</h3>

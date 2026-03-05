@@ -22,7 +22,7 @@ class NotificationSystem {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     
-    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const icons = { success: 'OK', error: 'X', warning: '!', info: 'i' };
     
     notification.innerHTML = `
       <div class="notification-icon">${icons[type] || icons.info}</div>
@@ -51,7 +51,7 @@ class NotificationSystem {
     modal.innerHTML = `
       <div class="confirm-modal-overlay"></div>
       <div class="confirm-modal-content">
-        <div class="confirm-modal-icon">⚠</div>
+        <div class="confirm-modal-icon">!</div>
         <div class="confirm-modal-message">${message}</div>
         <div class="confirm-modal-buttons">
           <button class="confirm-btn confirm-cancel">Cancel</button>
@@ -77,7 +77,7 @@ class NotificationSystem {
     modal.innerHTML = `
       <div class="confirm-modal-overlay"></div>
       <div class="confirm-modal-content">
-        <div class="confirm-modal-icon">✎</div>
+        <div class="confirm-modal-icon">!</div>
         <div class="confirm-modal-message">${message}</div>
         <input type="text" class="confirm-modal-input" value="${defaultValue}" placeholder="Enter value...">
         <div class="confirm-modal-buttons">
@@ -103,7 +103,7 @@ class NotificationSystem {
 
 window.notify = new NotificationSystem();
 
-// ── Fix #12: guard against duplicate style injection ─────────────────────────
+//  Fix #12: guard against duplicate style injection 
 if (!document.getElementById('notification-styles')) {
   const notificationStyles = document.createElement('style');
   notificationStyles.id = 'notification-styles';

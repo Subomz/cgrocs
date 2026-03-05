@@ -33,6 +33,7 @@
     <nav class="customer-nav">
         <div class="navlogo">
             <img src="images/CloEx.png" alt="ColEx" width="40px">
+            <span id="customer-store-label" style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);margin-left:8px;"></span>
         </div>
 
         <div id="nav-search-wrap">
@@ -85,6 +86,15 @@
     <script src="notifications.js"></script>
     <script src="cardstorage.js" type="module"></script>
     <script src="cart.js" type="module"></script>
+    <script>
+        // Show selected store label in nav
+        document.addEventListener('DOMContentLoaded', function() {
+            const storeId = sessionStorage.getItem('selectedStore') || 'store1';
+            const label   = storeId === 'store1' ? 'Main Branch' : 'Second Branch';
+            const el      = document.getElementById('customer-store-label');
+            if (el) el.textContent = label;
+        });
+    </script>
 
     <!-- My Orders Panel -->
     <div id="orders-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:99990;" onclick="window.closeOrdersPopup()"></div>

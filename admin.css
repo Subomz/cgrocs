@@ -204,7 +204,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 
 /* Stat cards */
 .dash-stats {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
 }
 
 .stat-card {
@@ -635,7 +635,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 .pend-status-ready { background: var(--green-bg); color: var(--green); }
 
 /* ── RESPONSIVE ───────────────────────────────────────────── */
-@media (max-width: 900px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 900px) { .dash-stats { grid-template-columns: repeat(3, 1fr); } }
 
 @media screen and (max-width: 768px) {
   .tabs-header   { display: none; }
@@ -671,6 +671,6 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 }
 
 @media (max-width: 560px) {
-  .dash-stats { grid-template-columns: 1fr 1fr; }
+  .dash-stats { grid-template-columns: 1fr; }
   .dash-profile-card { flex-direction: column; text-align: center; }
 }

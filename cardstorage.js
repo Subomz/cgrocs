@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-import { customerConfig, adminConfig } from "./firebase-config.js";  // fix #10
+import { customerConfig, adminConfig, getActiveStore, storeCol, storeDoc } from "./firebase-config.js";
 
 const CARDSTORAGE_APP_NAME = 'cardstorage';
 let app;
@@ -17,6 +17,21 @@ const db   = getFirestore(app);
 const adminLogApp = getApps().find(a => a.name === 'admin-guard')
     || initializeApp(adminConfig, 'admin-guard');
 const adminLogDb = getFirestore(adminLogApp);
+
+// ── Active store — always resolved live so auth guards can set it first ───────
+// Never freeze _storeId at module load. col() and docRef() call
+// resolveStoreId() fresh on every Firestore operation so that by the time
+// init() or reloadStoreProducts() runs the auth guard has already written
+// the correct storeId to sessionStorage / window.cashierStoreId.
+function resolveStoreId() {
+    return window.cashierStoreId
+        || sessionStorage.getItem('cashierStoreId')
+        || sessionStorage.getItem('selectedStore')
+        || 'store1';
+}
+
+// Expose so other modules can read the current store
+window.getStoreId = () => resolveStoreId();
 
 const DEFAULT_PRODUCTS = [
   { name: "Luxury Watch",     stock: 20, price: 15000, category: "Accessories", img: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=200&fit=crop" },
@@ -42,10 +57,14 @@ onAuthStateChanged(auth, (user) => {
   cartKey = user ? `cart_${user.uid}` : "guestCart";
 });
 
-// ── Firestore: products ───────────────────────────────────────────────────────
+//  Store path helpers 
+function col(name)        { return collection(db, storeCol(resolveStoreId(), name)); }
+function docRef(name, id) { return doc(db, storeDoc(resolveStoreId(), name, id)); }
+
+//  Firestore: products 
 async function loadProducts() {
   try {
-    const snap = await getDocs(collection(db, "products"));
+    const snap = await getDocs(col('products'));
     const loaded = [];
     snap.forEach(d => loaded.push({ id: d.id, ...d.data() }));
     if (loaded.length === 0) { await initializeDefaultProducts(); return loadProducts(); }
@@ -53,17 +72,17 @@ async function loadProducts() {
   } catch (e) {
     console.error('Firestore error:', e);
     notify.error('Database error. Using local cache.');
-    const local = localStorage.getItem('myProducts');
+    const local = localStorage.getItem(`myProducts_${resolveStoreId()}`);
     return local ? JSON.parse(local) : [...DEFAULT_PRODUCTS];
   }
 }
 async function initializeDefaultProducts() {
-  try { for (const p of DEFAULT_PRODUCTS) await addDoc(collection(db, "products"), p); }
+  try { for (const p of DEFAULT_PRODUCTS) await addDoc(col('products'), p); }
   catch (e) { console.error('Init error:', e); }
 }
-async function saveProductToFirestore(data)       { return (await addDoc(collection(db, "products"), data)).id; }
-async function updateProductInFirestore(id, data) { await updateDoc(doc(db, "products", id), data); }
-async function deleteProductFromFirestore(id)     { await deleteDoc(doc(db, "products", id)); }
+async function saveProductToFirestore(data)       { return (await addDoc(col('products'), data)).id; }
+async function updateProductInFirestore(id, data) { await updateDoc(doc(db, storeDoc(resolveStoreId(), 'products', id)), data); }
+async function deleteProductFromFirestore(id)     { await deleteDoc(doc(db, storeDoc(resolveStoreId(), 'products', id))); }
 
 async function logProductChange(action, productId, snapshot, before, after, cashierEmail, cashierName) {
   try {
@@ -76,13 +95,11 @@ async function logProductChange(action, productId, snapshot, before, after, cash
         }
       });
     }
-    await addDoc(collection(adminLogDb, 'product_logs'), {
-      action,
-      productId,
+    await addDoc(collection(adminLogDb, storeCol(resolveStoreId(), 'product_logs')), {
+      action, productId,
       productName: (after || snapshot).name || '',
-      changes,
-      cashierEmail,
-      cashierName,
+      changes, cashierEmail, cashierName,
+      storeId: resolveStoreId(),
       timestamp: new Date().toISOString()
     });
   } catch (e) {
@@ -90,16 +107,16 @@ async function logProductChange(action, productId, snapshot, before, after, cash
   }
 }
 
-// ── Firestore: categories ─────────────────────────────────────────────────────
+//  Firestore: categories 
 async function loadCategories() {
   try {
-    const snap = await getDoc(doc(db, 'categories', 'list'));
+    const snap = await getDoc(docRef('categories', 'list'));
     if (snap.exists()) return snap.data().items || [];
   } catch (e) { console.warn('loadCategories:', e.message); }
   return [...new Set(products.map(p => p.category).filter(Boolean))];
 }
 async function saveCategories(cats) {
-  try { await setDoc(doc(db, 'categories', 'list'), { items: cats }); }
+  try { await setDoc(docRef('categories', 'list'), { items: cats }); }
   catch (e) { console.warn('saveCategories:', e.message); }
 }
 async function getAllCategories() {
@@ -108,7 +125,7 @@ async function getAllCategories() {
   return [...new Set([...fromFirestore, ...fromProducts])].sort();
 }
 
-// ── Category dropdown ─────────────────────────────────────────────────────────
+//  Category dropdown 
 async function populateCategoryDropdown(selectedValue) {
   const sel = document.getElementById('p-category'); if (!sel) return;
   const cats = await getAllCategories();
@@ -116,7 +133,7 @@ async function populateCategoryDropdown(selectedValue) {
     cats.map(c => `<option value="${c}"${c === selectedValue ? ' selected' : ''}>${c}</option>`).join('');
 }
 
-// ── Add/delete category modal ─────────────────────────────────────────────────
+//  Add/delete category modal 
 window.openAddCategoryModal = function() {
   const existing = document.getElementById('add-cat-modal'); if (existing) existing.remove();
   const modal = document.createElement('div');
@@ -179,10 +196,8 @@ window.deleteCategory = async function(name) {
   notify.success(`"${name}" removed.`);
 };
 
-// ── Image helpers ─────────────────────────────────────────────────────────────
-// Fix #3: limit raised to 5MB to match the "Max size: 5MB" label in admin.html
+//  Image helpers 
 const MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024;
-
 function convertImageToBase64(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader(); r.onload = e => resolve(e.target.result); r.onerror = e => reject(e); r.readAsDataURL(file);
@@ -192,7 +207,6 @@ window.handleImageSelect = function(event) {
   const file = event.target.files[0];
   if (!file) { selectedImageFile = null; imagePreviewUrl = null; updateImagePreview(null); return; }
   if (!file.type.startsWith('image/')) { notify.error('Select an image file.'); event.target.value = ''; return; }
-  // Fix #3: was 2MB, now matches the "Max size: 5MB" label shown to the user
   if (file.size > MAX_PRODUCT_IMAGE_BYTES) { notify.error('Image must be under 5MB.'); event.target.value = ''; return; }
   selectedImageFile = file;
   const r = new FileReader(); r.onload = e => { imagePreviewUrl = e.target.result; updateImagePreview(imagePreviewUrl); }; r.readAsDataURL(file);
@@ -222,7 +236,7 @@ window.toggleImageInputMethod = function() {
   }
 };
 
-// ── Render: Admin ─────────────────────────────────────────────────────────────
+//  Render: Admin 
 function renderCardsAdmin() {
   const container = document.getElementById('product-container-admin'); if (!container) return;
   _buildAdminCategoryBar();
@@ -241,7 +255,7 @@ function renderCardsAdmin() {
   container.innerHTML = filtered.map(({ p, index }) => {
     const isLow = p.stock > 0 && p.stock <= LOW_STOCK, isOut = p.stock <= 0;
     const badge = isOut ? `<span class="admin-stock-badge badge-out">OUT OF STOCK</span>`
-                : isLow ? `<span class="admin-stock-badge badge-low">⚠ Low Stock</span>` : '';
+                : isLow ? `<span class="admin-stock-badge badge-low"> Low Stock</span>` : '';
     return `
     <div class="card ${isLow || isOut ? 'card-stock-warn' : ''}">
       ${badge}
@@ -278,7 +292,7 @@ window.clearAdminSearch = function() {
   renderCardsAdmin();
 };
 
-// ── Render: Customer ──────────────────────────────────────────────────────────
+//  Render: Customer 
 function renderCardsCustomer() {
   const container = document.getElementById('product-container-customer'); if (!container) return;
   if (!products || products.length === 0) {
@@ -331,7 +345,7 @@ window.clearSearch = function() {
   renderCardsCustomer();
 };
 
-// ── Render: Home ──────────────────────────────────────────────────────────────
+//  Render: Home 
 function renderCardsHome() {
   const container = document.getElementById('product-container-home'); if (!container) return;
   if (!products || products.length === 0) {
@@ -347,7 +361,7 @@ function renderCardsHome() {
     </div>`).join('');
 }
 
-// ── Product CRUD ──────────────────────────────────────────────────────────────
+//  Product CRUD 
 window.saveProduct = async function() {
   const name      = document.getElementById('p-name').value.trim();
   const price     = parseFloat(document.getElementById('p-price').value);
@@ -376,7 +390,7 @@ window.saveProduct = async function() {
       notify.success("Product updated!");
     }
     products = await loadProducts(); window.products = products;
-    localStorage.setItem('myProducts', JSON.stringify(products));
+    localStorage.setItem(`myProducts_${resolveStoreId()}`, JSON.stringify(products));
     renderAll(); clearInputs();
     document.getElementById('save-btn').innerText = "Save Product";
     await populateCategoryDropdown('');
@@ -386,9 +400,13 @@ window.saveProduct = async function() {
 window.deleteProduct = function(index) {
   notify.confirm(`Delete "${products[index].name}"?`, async () => {
     try {
-      await deleteProductFromFirestore(products[index].id);
+      const deletedProduct = products[index];
+      const cashierEmail   = (window.currentAdmin && window.currentAdmin.email) || '';
+      const cashierName    = (window.cashierProfile && window.cashierProfile.name) ? window.cashierProfile.name : cashierEmail;
+      await deleteProductFromFirestore(deletedProduct.id);
+      await logProductChange('delete', deletedProduct.id, deletedProduct, deletedProduct, null, cashierEmail, cashierName);
       products = await loadProducts(); window.products = products;
-      localStorage.setItem('myProducts', JSON.stringify(products));
+      localStorage.setItem(`myProducts_${resolveStoreId()}`, JSON.stringify(products));
       renderAll(); notify.success("Deleted!");
     } catch (e) { notify.error("Error deleting."); console.error(e); }
   });
@@ -426,7 +444,7 @@ window.changeQty = function(index, delta) {
   else if (newVal > product.stock) { notify.warning(`Only ${product.stock} available.`); }
 };
 
-// ── Logout ────────────────────────────────────────────────────────────────────
+//  Logout 
 function doLogout() {
   sessionStorage.setItem('intentional_logout','true');
   signOut(auth).then(()=>notify.success("Logged out!")).catch(e=>{sessionStorage.removeItem('intentional_logout');notify.error("Logout error.");});
@@ -436,7 +454,7 @@ function showLogoutWarning(n) {
   const modal=document.createElement('div'); modal.id='logout-warning-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
   modal.innerHTML=`<div style="background:white;border-radius:16px;padding:32px 28px 24px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.18);font-family:'Segoe UI',sans-serif;text-align:center;">
-    <div style="font-size:40px;margin-bottom:12px;">🛒</div>
+    <div style="font-size:40px;margin-bottom:12px;"></div>
     <h2 style="font-size:18px;font-weight:700;color:#111;margin-bottom:10px;">Your cart will be cleared</h2>
     <p style="font-size:14px;color:#666;margin-bottom:24px;line-height:1.5;">You have <strong>${n} item${n!==1?'s':''}</strong> in your cart. Logging out will clear it.</p>
     <div style="display:flex;gap:10px;">
@@ -457,7 +475,7 @@ window.toggleFilterBar = function(barId, btnId) {
   const isOpen = bar.classList.toggle('open');
   if (btn) {
     btn.classList.toggle('active', isOpen);
-    btn.textContent = isOpen ? '✕ Close' : '⊞ Filter';
+    btn.textContent = isOpen ? ' Close' : '⊞ Filter';
   }
 };
 
@@ -469,20 +487,36 @@ window.renderCardsCustomer=renderCardsCustomer;
 function renderAll(){renderCardsAdmin();renderCardsCustomer();renderCardsHome();}
 window.products=products; window.loadProducts=loadProducts;
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-// Fix #8: removed the duplicate window.addEventListener('load', ...) block.
-// A single DOMContentLoaded call is sufficient — running init() twice was
-// doubling Firestore reads on every page load.
-async function init() {
+// Called by the store picker (home.html) and by admin-auth-guard after storeId is confirmed
+window.reloadStoreProducts = async function() {
   try {
-    products=await loadProducts(); window.products=products;
+    products = await loadProducts();
+    window.products = products;
     renderAll();
     await populateCategoryDropdown('');
-  } catch(e){console.error('Init error:',e);notify.error('Error initialising.');}
+  } catch(e){ console.error('reloadStoreProducts error:', e); }
+};
+
+// Auto-init only on the customer page — admin and home pages control
+// their own load timing so products are never fetched before a store is set.
+function isAdminPage() {
+  const path = window.location.pathname;
+  return path.includes('admin.html') || path.includes('home.html');
 }
 
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
+async function init() {
+  try {
+    products = await loadProducts();
+    window.products = products;
+    renderAll();
+    await populateCategoryDropdown('');
+  } catch(e){ console.error('Init error:', e); notify.error('Error initialising.'); }
+}
+
+if (!isAdminPage()) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 }

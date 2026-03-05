@@ -32,6 +32,8 @@ onAuthStateChanged(auth, (user) => {
     if (!user) {
         if (sessionStorage.getItem('intentional_logout')) {
             sessionStorage.removeItem('intentional_logout');
+            // Clear store selection on logout so picker shows again
+            sessionStorage.removeItem('selectedStore');
             setTimeout(() => { window.location.href = 'home.html'; }, 2000);
         } else {
             console.log("Unauthorized access - redirecting to login");
@@ -40,11 +42,23 @@ onAuthStateChanged(auth, (user) => {
     } else {
         console.log("User authenticated:", user.email);
         window.currentUser = user;
+
+        // If no store was selected (e.g. direct URL access), send back to home
+        if (!sessionStorage.getItem('selectedStore')) {
+            window.location.href = 'home.html';
+            return;
+        }
+
         document.body.style.visibility = 'visible';
         setTimeout(() => {
             loadingOverlay.style.opacity    = '0';
             loadingOverlay.style.transition = 'opacity 0.3s';
             setTimeout(() => loadingOverlay.remove(), 300);
         }, 500);
+
+        // Ensure products are loaded for the correct selected store
+        if (typeof window.reloadStoreProducts === 'function') {
+            window.reloadStoreProducts();
+        }
     }
 });

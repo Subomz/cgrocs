@@ -1,17 +1,22 @@
 import { getFirestore, collection, addDoc, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getActiveStore, storeCol, storeDoc } from "./firebase-config.js";
 
 // Get Firestore from the same named app that cardstorage.js created
 const app = getApps().find(a => a.name === 'cardstorage') || getApps()[0];
 const db = getFirestore(app);
 
-// ─────────────────────────────────────────────────────────────────────────────
+// Store-aware collection helpers
+function _col(name)        { return collection(db, storeCol(getActiveStore(), name)); }
+function _docRef(name, id) { return doc(db, storeDoc(getActiveStore(), name, id)); }
+
+// 
 // PAYSTACK CONFIG
-// ⚠️  BEFORE GOING LIVE: replace the test key below with your live public key.
+//   BEFORE GOING LIVE: replace the test key below with your live public key.
 //     Test key:  pk_test_...   → only works in test mode, no real charges
 //     Live key:  pk_live_...   → real charges, must be kept secret on the server
 //     Never commit your SECRET key (sk_...) here — this file is client-side.
-// ─────────────────────────────────────────────────────────────────────────────
+// 
 const PAYSTACK_PUBLIC_KEY = 'pk_live_e0c9caffa250105c691eb5a76f63adac7b07ca34'; // REPLACE WITH YOUR LIVE PUBLIC KEY
 
 // Cart management system
@@ -34,7 +39,7 @@ async function createFirestoreReservation(productId, productName, quantity, prod
   if (!productId) return; // products without a Firestore ID can't be reserved
   try {
     const sessionId = getOrCreateSessionId();
-    const docRef = await addDoc(collection(db, 'reservations'), {
+    const docRef = await addDoc(_col('reservations'), {
       productId,
       productName,
       quantity,
@@ -53,7 +58,7 @@ async function updateFirestoreReservation(productIndex, newQuantity) {
   const resDocId = firestoreReservations[productIndex];
   if (!resDocId) return;
   try {
-    await updateDoc(doc(db, 'reservations', resDocId), { quantity: newQuantity });
+    await updateDoc(_docRef('reservations', resDocId), { quantity: newQuantity });
   } catch (e) {
     console.warn('Could not update Firestore reservation:', e.message);
   }
@@ -64,7 +69,7 @@ async function deleteFirestoreReservation(productIndex) {
   const resDocId = firestoreReservations[productIndex];
   if (!resDocId) return;
   try {
-    await deleteDoc(doc(db, 'reservations', resDocId));
+    await deleteDoc(_docRef('reservations', resDocId));
     delete firestoreReservations[productIndex];
   } catch (e) {
     console.warn('Could not delete Firestore reservation:', e.message);
@@ -100,7 +105,7 @@ async function getFirestoreReservedQty(productId) {
   try {
     const sessionId = getOrCreateSessionId();
     const snap = await getDocs(
-      query(collection(db, 'reservations'),
+      query(_col('reservations'),
         where('productId', '==', productId)
       )
     );
@@ -313,7 +318,7 @@ function generatePurchaseId() {
 // If Firestore fails the error is surfaced to the customer so they can retry.
 async function savePurchase(purchaseData) {
   try {
-    const docRef = await addDoc(collection(db, "purchases"), purchaseData);
+    const docRef = await addDoc(_col("purchases"), purchaseData);
     console.log("Purchase saved to Firestore:", docRef.id);
   } catch (e) {
     console.error("Firestore save failed:", e);
@@ -337,7 +342,7 @@ function showQRCodeModal(purchaseId, items, total) {
   modal.innerHTML = `
     <div class="qr-modal-content">
       <div class="qr-header">
-        <h2>✓ Purchase Successful!</h2>
+        <h2> Purchase Successful!</h2>
         <button onclick="closeQRModal()" class="close-modal">×</button>
       </div>
       <div class="qr-body">
@@ -485,6 +490,7 @@ window._paystackCallback = function(response) {
     date:      new Date().toISOString(),
     reference: response.reference,
     verified:  false,
+    storeId:   getActiveStore(),
     uid:       (window.currentUser && window.currentUser.uid)   || '',
     email:     (window.currentUser && window.currentUser.email) || '',
     customerName:  _profileName  || '',
@@ -530,7 +536,7 @@ window._paystackOnClose = function() {
 
 
 
-// ── Proceed to payment ─────────────────────────────────────────────────────
+//  Proceed to payment 
 window.proceedToPayment = async function() {
   if (cart.length === 0) {
     notify.warning("Your cart is empty!");

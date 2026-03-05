@@ -23,7 +23,7 @@ let pendingAvatarBase64 = null; // tracks a newly picked photo this session
 let _allPurchases = [];         // cached for filter re-renders
 let _purchaseFilter = 'all';    // all | pending | ready | verified
 
-// ── Auth ───────────────────────────────────────────────────────────────────
+//  Auth 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
@@ -38,7 +38,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// ── Load profile from Firestore ────────────────────────────────────────────
+//  Load profile from Firestore 
 async function loadProfile(uid) {
     try {
         const snap = await getDoc(doc(db, "users", uid));
@@ -67,10 +67,10 @@ async function loadProfile(uid) {
             `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=111&color=fff&size=120`;
     }
 
-    setTextContent('badge-phone', p.phone ? `📞 ${p.phone}` : '📞 No phone set');
+    setTextContent('badge-phone', p.phone ? ` ${p.phone}` : ' No phone set');
 }
 
-// ── Avatar file input ──────────────────────────────────────────────────────
+//  Avatar file input 
 // Fix #2: resizeImageToBase64 is no longer duplicated here — it is loaded
 // from the shared avatar-upload.js which exposes it on window.
 // profile.html now includes <script src="avatar-upload.js"></script>.
@@ -89,7 +89,7 @@ function setupAvatarInput() {
         const file = e.target.files[0];
         if (!file) return;
 
-        // ── Block oversized files immediately at selection ──────────────
+        //  Block oversized files immediately at selection 
         if (file.size > MAX_FILE_BYTES) {
             notify.error('Photo is too large. Please choose an image under 5MB.');
             fresh.value = '';
@@ -124,7 +124,7 @@ function setupAvatarInput() {
     });
 }
 
-// ── Save profile ───────────────────────────────────────────────────────────
+//  Save profile 
 window.saveProfile = async function() {
     if (!currentUser) { notify.error("Not logged in."); return; }
 
@@ -164,7 +164,7 @@ window.saveProfile = async function() {
 
         // Refresh sidebar
         setTextContent('sidebar-name',  updated.fullName);
-        setTextContent('badge-phone', updated.phone ? `📞 ${updated.phone}` : '📞 No phone set');
+        setTextContent('badge-phone', updated.phone ? ` ${updated.phone}` : ' No phone set');
 
         // Keep avatar display in sync
         const avatarEl = document.getElementById('avatar-display');
@@ -182,7 +182,7 @@ window.saveProfile = async function() {
     }
 };
 
-// ── Purchase history ───────────────────────────────────────────────────────
+//  Purchase history 
 async function loadPurchaseHistory(uid) {
     const listEl = document.getElementById('purchase-list');
     if (!listEl) return;
@@ -215,9 +215,9 @@ async function loadPurchaseHistory(uid) {
             listEl.insertAdjacentHTML('beforebegin', `
             <div id="ph-filter-bar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
                 <button class="ph-filt-btn active" data-f="all"      onclick="window._filterPurchases(this)">All</button>
-                <button class="ph-filt-btn" data-f="pending"   onclick="window._filterPurchases(this)">⏳ Preparing</button>
-                <button class="ph-filt-btn" data-f="ready"     onclick="window._filterPurchases(this)">✅ Ready</button>
-                <button class="ph-filt-btn" data-f="verified"  onclick="window._filterPurchases(this)">✓ Collected</button>
+                <button class="ph-filt-btn" data-f="pending"   onclick="window._filterPurchases(this)"> Preparing</button>
+                <button class="ph-filt-btn" data-f="ready"     onclick="window._filterPurchases(this)">Ready</button>
+                <button class="ph-filt-btn" data-f="verified"  onclick="window._filterPurchases(this)">Collected</button>
             </div>
             <style>
                 .ph-filt-btn{padding:6px 14px;border-radius:20px;border:1.5px solid #ddd;background:white;color:#555;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
@@ -255,18 +255,18 @@ function _renderPurchaseList() {
         // Status badge — 3 states: not_ready → ready → verified
         let statusHtml;
         if (p.verified) {
-            statusHtml = `<span class="purchase-status status-verified">✓ Collected${verifiedDate ? ' · ' + verifiedDate : ''}</span>`;
+            statusHtml = `<span class="purchase-status status-verified">Collected${verifiedDate ? ' · ' + verifiedDate : ''}</span>`;
         } else if (p.orderStatus === 'ready') {
             const isDelivery = (p.fulfillmentMethod === 'delivery');
-            const readyLabel = isDelivery ? '🚚 Out for Delivery' : '✅ Ready for Pickup';
+            const readyLabel = isDelivery ? ' Out for Delivery' : ' Ready for Pickup';
             statusHtml = `<span class="purchase-status status-ready">${readyLabel}</span>`;
         } else {
-            statusHtml = `<span class="purchase-status status-pending">⏳ Being Prepared</span>`;
+            statusHtml = `<span class="purchase-status status-pending"> Being Prepared</span>`;
         }
 
         // Fulfillment pills
         const method  = p.fulfillmentMethod || 'unknown';
-        const methodLabel = method === 'pickup' ? '🏪 Store Pickup' : method === 'delivery' ? '🚚 Delivery' : '—';
+        const methodLabel = method === 'pickup' ? ' Store Pickup' : method === 'delivery' ? ' Delivery' : '—';
         const addrText    = p.deliveryAddress && p.deliveryAddress !== 'Store pickup' ? p.deliveryAddress : '';
 
         // Re-show QR button (only if purchase ID exists)
@@ -288,7 +288,7 @@ function _renderPurchaseList() {
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <div class="purchase-detail">
                     <span>${methodLabel}</span>
-                    ${addrText ? `<span>📍 ${addrText}</span>` : ''}
+                    ${addrText ? `<span> ${addrText}</span>` : ''}
                     ${p.subtotal && p.deliveryFee ? `<span>+₦${p.deliveryFee.toLocaleString(undefined,{minimumFractionDigits:2})} delivery</span>` : ''}
                 </div>
                 ${qrBtn}
@@ -297,7 +297,7 @@ function _renderPurchaseList() {
     }).join('');
 }
 
-// ── Purchase history filter ───────────────────────────────────────────────
+//  Purchase history filter 
 window._filterPurchases = function(btn) {
     document.querySelectorAll('.ph-filt-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -305,7 +305,7 @@ window._filterPurchases = function(btn) {
     _renderPurchaseList();
 };
 
-// ── Logout ─────────────────────────────────────────────────────────────────
+//  Logout 
 function setupLogoutButtons() {
     document.querySelectorAll('.logout-button').forEach(btn => {
         const fresh = btn.cloneNode(true);
@@ -321,7 +321,7 @@ function setupLogoutButtons() {
     });
 }
 
-// ── Re-show QR modal from purchase history ────────────────────────────────
+//  Re-show QR modal from purchase history 
 window._reshowQR = function(purchaseId, itemsText, total) {
     // Remove any existing QR modal
     const existing = document.getElementById('profile-qr-modal');
@@ -379,7 +379,7 @@ window._downloadProfileQR = function(purchaseId) {
     link.click();
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+//  Helpers 
 function setValue(id, value) {
     const el = document.getElementById(id);
     if (el) el.value = value;

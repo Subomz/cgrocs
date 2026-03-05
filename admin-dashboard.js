@@ -4,9 +4,9 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import {
   getFirestore, collection, getDocs, doc, getDoc, setDoc
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-import { customerConfig, adminConfig } from "./firebase-config.js";
+import { customerConfig, adminConfig, storeCol, storeDoc, STORE_LABELS } from "./firebase-config.js";
 
-// ── Firebase ──────────────────────────────────────────────────────────────────
+//  Firebase 
 const adminApp  = getApps().find(a => a.name === 'admin-guard')
   || initializeApp(adminConfig, 'admin-guard');
 const adminAuth = getAuth(adminApp);
@@ -20,8 +20,12 @@ const adminDb = getFirestore(adminApp);
 const LOW_STOCK_THRESHOLD = 5;
 let cashierProfile = {};
 let currentAdminUser = null;
+let _cashierStoreId = 'store1'; // set after loading cashier profile
 
-// ── Security: escape HTML to prevent XSS when injecting user-controlled data ─
+// Store-aware Firestore helpers
+function custCol(name) { return collection(customerDb, storeCol(_cashierStoreId, name)); }
+
+//  Security: escape HTML to prevent XSS when injecting user-controlled data 
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -32,7 +36,7 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+//  Auth 
 onAuthStateChanged(adminAuth, async (user) => {
     if (!user) return;
     currentAdminUser = user;
@@ -44,6 +48,11 @@ async function loadCashierProfile(user) {
         const snap = await getDoc(doc(adminDb, 'cashiers', user.uid));
         cashierProfile = snap.exists() ? snap.data() : {};
         window.cashierProfile = cashierProfile;
+
+        // Set the active store for this cashier
+        _cashierStoreId = cashierProfile.storeId || 'store1';
+        window.cashierStoreId = _cashierStoreId;
+        sessionStorage.setItem('cashierStoreId', _cashierStoreId);
     } catch (e) {
         console.warn('Could not load cashier profile:', e.message);
         if (typeof notify !== 'undefined') {
@@ -59,11 +68,16 @@ async function loadCashierProfile(user) {
 
     const displayName = cashierProfile.name || user.email.split('@')[0];
     const initials    = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    const storeLabel  = STORE_LABELS[_cashierStoreId] || _cashierStoreId;
 
     const navAvatar = document.getElementById('cashier-avatar');
     const navName   = document.getElementById('cashier-name');
     if (navAvatar) navAvatar.textContent = initials;
     if (navName)   navName.textContent   = displayName;
+
+    // Show store badge in nav if element exists
+    const storeEl = document.getElementById('nav-store-label');
+    if (storeEl) storeEl.textContent = storeLabel;
 
     const dashAvatar = document.getElementById('dash-avatar');
     const dashName   = document.getElementById('dash-cashier-name');
@@ -71,16 +85,16 @@ async function loadCashierProfile(user) {
     if (dashAvatar) dashAvatar.textContent = initials;
     if (dashName)   dashName.textContent   = cashierProfile.name  || 'No name set';
     if (dashEmail)  dashEmail.textContent  = cashierProfile.role
-        ? `${cashierProfile.role} \u00b7 ${user.email}`
-        : user.email;
+        ? `${cashierProfile.role} · ${user.email} · ${storeLabel}`
+        : `${user.email} · ${storeLabel}`;
 }
 
-// ── Dashboard data ─────────────────────────────────────────────────────────────
+//  Dashboard data 
 window.loadDashboard = async function() {
     try {
         const [purchasesSnap, productsSnap] = await Promise.all([
-            getDocs(collection(customerDb, 'purchases')),
-            getDocs(collection(customerDb, 'products'))
+            getDocs(custCol('purchases')),
+            getDocs(custCol('products'))
         ]);
 
         const purchases = [];
@@ -92,12 +106,11 @@ window.loadDashboard = async function() {
         const todayStr      = new Date().toDateString();
         const todayOrders   = purchases.filter(p => p.date && new Date(p.date).toDateString() === todayStr);
         const pendingOrders = purchases.filter(p => !p.verified);
-        const todayRevenue  = todayOrders.reduce((s, p) => s + (p.total || 0), 0);
+        
         const lowStockItems = products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock >= 0);
 
         setText('stat-today',    todayOrders.length);
         setText('stat-pending',  pendingOrders.length);
-        setText('stat-revenue',  '\u20a6' + todayRevenue.toLocaleString('en-NG', { minimumFractionDigits: 2 }));
         setText('stat-lowstock', lowStockItems.length);
 
         const pendingEl = document.getElementById('stat-pending');
@@ -173,7 +186,7 @@ window.loadDashboard = async function() {
     }
 };
 
-// ── Cashier profile modal ──────────────────────────────────────────────────────
+//  Cashier profile modal 
 window.openCashierProfileModal = function() {
     const existing = document.getElementById('cashier-profile-modal');
     if (existing) existing.remove();

@@ -28,7 +28,10 @@
 
     <div class="nav-right">
       <div class="nav-avatar" id="ha-avatar">HC</div>
-      <span class="nav-name" id="ha-name">Head Cashier</span>
+      <div>
+        <span class="nav-name" id="ha-name">Head Admin</span>
+        <span id="ha-role-badge" style="display:block;font-size:11px;color:rgba(255,255,255,0.55);margin-top:1px;"></span>
+      </div>
       <button class="btn-logout logout-button">Logout</button>
       <button class="nav-hamburger" onclick="openDrawer()">&#9776;</button>
     </div>
@@ -44,7 +47,7 @@
     <button class="drawer-tab"        onclick="switchTab('accounts',this);closeDrawer()">Manage Accounts</button>
   </div>
 
-  <!-- ═══ TAB 1: ALL PURCHASES ═══ -->
+  <!--  TAB 1: ALL PURCHASES  -->
   <div class="tab-content active" id="tab-purchases">
     <div class="page-wrap">
       <div class="page-header">
@@ -73,6 +76,9 @@
           <div class="stat-value" id="s-revenue">&#8212;</div>
         </div>
       </div>
+
+      <!-- Store filter (general admin only — injected by JS) -->
+      <div id="store-filter-wrap" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
 
       <!-- Filters -->
       <div class="filter-bar">
@@ -103,7 +109,7 @@
     </div>
   </div>
 
-  <!-- ═══ TAB 2: BY CASHIER ═══ -->
+  <!--  TAB 2: BY CASHIER  -->
   <div class="tab-content" id="tab-by-cashier">
     <div class="page-wrap">
       <div class="page-header">
@@ -132,7 +138,7 @@
     </div>
   </div>
 
-  <!-- ═══ TAB 3: PRODUCTS ═══ -->
+  <!--  TAB 3: PRODUCTS  -->
   <div class="tab-content" id="tab-products">
     <div class="page-wrap">
       <div class="page-header">
@@ -147,9 +153,10 @@
           <span class="search-icon">&#9906;</span>
           <input type="text" id="prod-search" placeholder="Search product name or cashier..." oninput="applyProductFilters()">
         </div>
-        <button class="filter-pill active" data-f="all"  onclick="setProdFilter(this)">All</button>
-        <button class="filter-pill"        data-f="add"  onclick="setProdFilter(this)">Added</button>
-        <button class="filter-pill"        data-f="edit" onclick="setProdFilter(this)">Edited</button>
+        <button class="filter-pill active" data-f="all"    onclick="setProdFilter(this)">All</button>
+        <button class="filter-pill"        data-f="add"    onclick="setProdFilter(this)">Added</button>
+        <button class="filter-pill"        data-f="edit"   onclick="setProdFilter(this)">Edited</button>
+        <button class="filter-pill"        data-f="delete" onclick="setProdFilter(this)">Deleted</button>
         <input type="date" id="prod-date" class="filter-pill" style="cursor:pointer;" oninput="applyProductFilters()" title="Filter by date">
       </div>
 
@@ -168,7 +175,7 @@
     </div>
   </div>
 
-  <!-- ═══ TAB 4: MANAGE ACCOUNTS ═══ -->
+  <!--  TAB 4: MANAGE ACCOUNTS  -->
   <div class="tab-content" id="tab-accounts">
     <div class="page-wrap">
       <div class="page-header">
@@ -194,6 +201,13 @@
               <label>Last Name</label>
               <input type="text" id="new-last" placeholder="Doe">
             </div>
+          </div>
+          <div class="field">
+            <label>Assigned Store</label>
+            <select id="new-store">
+              <option value="store1">Store 1 — Main Branch</option>
+              <option value="store2">Store 2 — Second Branch</option>
+            </select>
           </div>
           <div class="field">
             <label>Role</label>
