@@ -21,10 +21,10 @@ document.body.appendChild(loadingOverlay);
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        if (sessionStorage.getItem('ha_intentional_logout')) {
-            sessionStorage.removeItem('ha_intentional_logout');
-        }
-        window.location.href = 'home.html';
+        // Unauthenticated: always send to login page regardless of how they got here.
+        // (Previously this incorrectly redirected to home.html.)
+        sessionStorage.removeItem('ha_intentional_logout');
+        window.location.href = 'login.html';
     } else {
         window.currentHeadAdmin = user;
 

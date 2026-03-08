@@ -1,9 +1,20 @@
 import { initializeApp, getApps }        from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs }
+import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs }
                                           from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-// Fix #1: import from the single source of truth instead of copy-pasting the config
 import { customerConfig, storeCol } from "./firebase-config.js";
+
+/* Security: escape all user-supplied or Firestore-sourced strings before
+   injecting them into innerHTML to prevent XSS attacks. */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 const APP_NAME = 'cardstorage';
 let app;
@@ -67,7 +78,8 @@ async function loadProfile(uid) {
             `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=111&color=fff&size=120`;
     }
 
-    setTextContent('badge-phone', p.phone ? ` ${p.phone}` : ' No phone set');
+    setTextContent('badge-phone',   p.phone   ? `📞 ${p.phone}`   : 'No phone set');
+    setTextContent('badge-address', p.address ? `📍 ${p.address}` : 'No address set');
 }
 
 //  Avatar file input 
@@ -164,7 +176,8 @@ window.saveProfile = async function() {
 
         // Refresh sidebar
         setTextContent('sidebar-name',  updated.fullName);
-        setTextContent('badge-phone', updated.phone ? ` ${updated.phone}` : ' No phone set');
+        setTextContent('badge-phone',   updated.phone   ? `📞 ${updated.phone}`   : 'No phone set');
+        setTextContent('badge-address', updated.address ? `📍 ${updated.address}` : 'No address set');
 
         // Keep avatar display in sync
         const avatarEl = document.getElementById('avatar-display');
@@ -190,16 +203,16 @@ async function loadPurchaseHistory(uid) {
     listEl.innerHTML = '<p class="empty-state">Loading...</p>';
 
     try {
-        // Firestore is the source of truth — fetch fresh data so verified
-        // status updated by the admin panel shows immediately.
-        // Purchases are stored per-store under stores/{storeId}/purchases
+        // Security fix: scope query to the current user instead of loading
+        // all purchases and filtering client-side. This also improves performance.
         const storeId = sessionStorage.getItem('selectedStore') || 'store1';
-        const snap = await getDocs(collection(db, storeCol(storeId, 'purchases')));
+        const q = query(
+            collection(db, storeCol(storeId, 'purchases')),
+            where('uid', '==', uid)
+        );
+        const snap = await getDocs(q);
         const purchases = [];
-        snap.forEach(d => {
-            const data = d.data();
-            if (data.uid === uid) purchases.push(data);
-        });
+        snap.forEach(d => purchases.push(d.data()));
 
         if (purchases.length === 0) {
             listEl.innerHTML = '<p class="empty-state">No purchases yet.</p>';
@@ -247,9 +260,11 @@ function _renderPurchaseList() {
     }
 
     listEl.innerHTML = purchases.slice(0, 40).map(p => {
-        const itemsText     = p.items ? p.items.map(i => `${i.quantity}× ${i.name}`).join(', ') : 'Unknown items';
-        const dateStr       = p.date ? new Date(p.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-        const verifiedDate  = p.verifiedDate ? new Date(p.verifiedDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+        // Security: escape all values sourced from Firestore before injecting into DOM
+        const safeId    = escapeHtml(p.id);
+        const itemsText = p.items ? p.items.map(i => `${escapeHtml(String(i.quantity))}× ${escapeHtml(i.name)}`).join(', ') : 'Unknown items';
+        const dateStr   = p.date ? new Date(p.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+        const verifiedDate = p.verifiedDate ? new Date(p.verifiedDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
 
         // Status badge — 3 states: not_ready → ready → verified
         let statusHtml;
@@ -263,32 +278,36 @@ function _renderPurchaseList() {
             statusHtml = `<span class="purchase-status status-pending"> Being Prepared</span>`;
         }
 
-        // Fulfillment pills
-        const method  = p.fulfillmentMethod || 'unknown';
-        const methodLabel = method === 'pickup' ? ' Store Pickup' : method === 'delivery' ? ' Delivery' : '—';
-        const addrText    = p.deliveryAddress && p.deliveryAddress !== 'Store pickup' ? p.deliveryAddress : '';
+        // Fulfillment info — escape before injecting
+        const method      = p.fulfillmentMethod || 'unknown';
+        const methodLabel = method === 'pickup' ? '🏪 Store Pickup' : method === 'delivery' ? '🚚 Delivery' : '—';
+        const addrText    = p.deliveryAddress && p.deliveryAddress !== 'Store pickup'
+            ? escapeHtml(p.deliveryAddress) : '';
 
-        // Re-show QR button (only if purchase ID exists)
-        const qrBtn = p.id ? `<button class="btn-reshow-qr" onclick="window._reshowQR('${p.id}', '${(p.items||[]).map(i=>i.quantity+'× '+i.name).join(', ').replace(/'/g,"\'")}', ${p.total || 0})">View QR</button>` : '';
+        // Security fix: use data-attributes instead of inline onclick with
+        // unescaped string interpolation — prevents XSS via malicious purchase IDs.
+        const qrBtn = safeId
+            ? `<button class="btn-reshow-qr qr-trigger" data-id="${safeId}" data-total="${escapeHtml(String(p.total || 0))}">View QR</button>`
+            : '';
 
         return `
-        <div class="purchase-item" style="flex-direction:column;align-items:stretch;gap:8px;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div class="purchase-item purchase-item--col">
+            <div class="purchase-item__row">
                 <div class="purchase-meta">
-                    <p class="purchase-id">${p.id || '—'}</p>
+                    <p class="purchase-id">${safeId || '—'}</p>
                     <p class="purchase-items-text">${itemsText}</p>
                     <p class="purchase-date">${dateStr}</p>
                 </div>
-                <div style="text-align:right;flex-shrink:0;">
+                <div class="purchase-right">
                     <p class="purchase-amount">₦${p.total ? p.total.toLocaleString(undefined,{minimumFractionDigits:2}) : '0.00'}</p>
                     ${statusHtml}
                 </div>
             </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div class="purchase-footer">
                 <div class="purchase-detail">
                     <span>${methodLabel}</span>
-                    ${addrText ? `<span> ${addrText}</span>` : ''}
-                    ${p.subtotal && p.deliveryFee ? `<span>+₦${p.deliveryFee.toLocaleString(undefined,{minimumFractionDigits:2})} delivery</span>` : ''}
+                    ${addrText ? `<span class="purchase-addr">${addrText}</span>` : ''}
+                    ${p.deliveryFee ? `<span class="purchase-fee">+₦${Number(p.deliveryFee).toLocaleString(undefined,{minimumFractionDigits:2})} delivery</span>` : ''}
                 </div>
                 ${qrBtn}
             </div>
@@ -303,6 +322,20 @@ window._filterPurchases = function(btn) {
     _purchaseFilter = btn.dataset.f;
     _renderPurchaseList();
 };
+
+// Delegated click handler for "View QR" buttons — avoids inline onclick
+// with unescaped string interpolation in the HTML template.
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.qr-trigger');
+    if (!btn) return;
+    const purchaseId = btn.dataset.id;
+    const total      = btn.dataset.total;
+    // Reconstruct items text from the rendered siblings for display only
+    const card       = btn.closest('.purchase-item--col');
+    const itemsEl    = card && card.querySelector('.purchase-items-text');
+    const itemsText  = itemsEl ? itemsEl.textContent : '';
+    window._reshowQR(purchaseId, itemsText, total);
+});
 
 //  Logout 
 function setupLogoutButtons() {
@@ -322,9 +355,13 @@ function setupLogoutButtons() {
 
 //  Re-show QR modal from purchase history 
 window._reshowQR = function(purchaseId, itemsText, total) {
-    // Remove any existing QR modal
     const existing = document.getElementById('profile-qr-modal');
     if (existing) existing.remove();
+
+    // Security: escape everything before DOM injection
+    const safePurchaseId = escapeHtml(purchaseId);
+    const safeItemsText  = escapeHtml(itemsText);
+    const safeTotal      = Number(total) || 0;
 
     const modal = document.createElement('div');
     modal.id = 'profile-qr-modal';
@@ -333,22 +370,27 @@ window._reshowQR = function(purchaseId, itemsText, total) {
         <div style="background:white;border-radius:16px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
             <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
                 <h2 style="margin:0;font-size:18px;font-weight:700;">Purchase QR Code</h2>
-                <button onclick="document.getElementById('profile-qr-modal').remove()" style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
+                <button id="qr-modal-close" style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">&#215;</button>
             </div>
             <div style="padding:24px;text-align:center;">
                 <p style="font-size:12px;color:#6b7280;margin-bottom:4px;">Purchase ID</p>
-                <p style="font-family:'Courier New',monospace;font-size:14px;font-weight:700;color:#1a1a1a;background:#f5f5f5;padding:10px;border-radius:8px;word-break:break-all;margin-bottom:16px;">${purchaseId}</p>
-                <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">${itemsText}</p>
-                <p style="font-size:16px;font-weight:700;color:#1a1a1a;margin-bottom:20px;">₦${Number(total).toLocaleString(undefined,{minimumFractionDigits:2})}</p>
+                <p style="font-family:'DM Mono','Courier New',monospace;font-size:14px;font-weight:700;color:#1a1a1a;background:#f5f5f5;padding:10px;border-radius:8px;word-break:break-all;margin-bottom:16px;">${safePurchaseId}</p>
+                <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">${safeItemsText}</p>
+                <p style="font-size:16px;font-weight:700;color:#1a1a1a;margin-bottom:20px;">&#8358;${safeTotal.toLocaleString(undefined,{minimumFractionDigits:2})}</p>
                 <div id="profile-qrcode" style="display:inline-block;margin-bottom:12px;"></div>
                 <p style="font-size:12px;color:#9ca3af;font-style:italic;">Show this to the cashier for pickup verification</p>
                 <div style="display:flex;gap:10px;margin-top:20px;">
-                    <button onclick="window._downloadProfileQR('${purchaseId}')" style="flex:1;padding:11px;background:white;color:#1a1a1a;border:1.5px solid #111;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Download</button>
-                    <button onclick="document.getElementById('profile-qr-modal').remove()" style="flex:1;padding:11px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Done</button>
+                    <button id="qr-download-btn" style="flex:1;padding:11px;background:white;color:#1a1a1a;border:1.5px solid #0a0a0a;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Download</button>
+                    <button id="qr-done-btn" style="flex:1;padding:11px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Done</button>
                 </div>
             </div>
         </div>`;
     document.body.appendChild(modal);
+
+    // Wire up buttons via event listeners — no inline onclick needed
+    modal.querySelector('#qr-modal-close').addEventListener('click', () => modal.remove());
+    modal.querySelector('#qr-done-btn').addEventListener('click',    () => modal.remove());
+    modal.querySelector('#qr-download-btn').addEventListener('click', () => window._downloadProfileQR(purchaseId));
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
     // Generate QR code — needs qrcodejs loaded on the page

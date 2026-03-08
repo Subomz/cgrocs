@@ -30,15 +30,12 @@ document.body.appendChild(loadingOverlay);
 
 onAuthStateChanged(auth, (user) => {
     if (!user) {
-        if (sessionStorage.getItem('intentional_logout')) {
-            sessionStorage.removeItem('intentional_logout');
-            // Clear store selection on logout so picker shows again
-            sessionStorage.removeItem('selectedStore');
-            setTimeout(() => { window.location.href = 'home.html'; }, 2000);
-        } else {
-            console.log("Unauthorized access - redirecting to login");
-            window.location.href = 'login.html';
-        }
+        // On logout (intentional or not from this page), always send to home.
+        // The intentional_logout flag in sessionStorage is set by the caller;
+        // we clear it here and redirect immediately without a delay.
+        sessionStorage.removeItem('intentional_logout');
+        sessionStorage.removeItem('selectedStore');
+        window.location.href = 'home.html';
     } else {
         console.log("User authenticated:", user.email);
         window.currentUser = user;

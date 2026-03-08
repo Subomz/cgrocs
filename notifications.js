@@ -22,7 +22,7 @@ class NotificationSystem {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     
-    const icons = { success: 'OK', error: 'X', warning: '!', info: 'i' };
+    const icons = { success: '✓', error: '✕', warning: '!', info: 'i' };
     
     notification.innerHTML = `
       <div class="notification-icon">${icons[type] || icons.info}</div>
