@@ -184,9 +184,9 @@
           <div class="page-sub">Create new cashier or admin logins</div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-          <button class="btn-store-bank-settings general-admin-only" onclick="openStoreManagement()" style="display:none;">&#9776; Manage Stores</button>
-          <button class="btn-store-bank-settings general-admin-only" onclick="openHeadAdminManagement()" style="display:none;">&#128100; Head Admins</button>
-          <button class="btn-store-bank-settings" onclick="openStoreBankSettings()">&#127968; Store Bank Accounts</button>
+          <button class="btn-store-bank-settings general-admin-only" onclick="openStoreManagement()" style="display:none;">Manage Stores</button>
+          <button class="btn-store-bank-settings general-admin-only" onclick="openHeadAdminManagement()" style="display:none;">Head Admins</button>
+          <button class="btn-store-bank-settings" onclick="openStoreBankSettings()">Store Bank Accounts</button>
         </div>
       </div>
 
@@ -305,6 +305,11 @@
           el.classList.add('active');
         }
       });
+      // Refresh account status each time the accounts tab is opened
+      // so role + store filters are applied after auth has fully loaded
+      if (name === 'accounts' && typeof window.loadSubaccountSettingsUI === 'function') {
+        window.loadSubaccountSettingsUI();
+      }
     }
 
     function openDrawer() {

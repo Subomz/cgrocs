@@ -644,24 +644,28 @@ function setText(id, val) { const el=document.getElementById(id); if(el) el.text
 let _banksList = [];
 
 // Load saved subaccount settings into the status badges in the Accounts tab
-async function loadSubaccountSettingsUI() {
+window.loadSubaccountSettingsUI = async function loadSubaccountSettingsUI() {
   const section = document.getElementById('subaccount-status-section');
 
-  // Always rebuild the rows so they reflect the current dynamic store list
+  // Store-head sees only their store; general admin sees all stores
+  const visibleStores = (_adminStores && _adminStores.length > 0)
+    ? _adminStores
+    : getStoreIds();
+
   if (section) {
-    const rows = getStoreIds().map(storeId => `
+    const rows = visibleStores.map(storeId => `
       <div class="subaccount-status-row">
         <span class="subaccount-store-name">${getStoreLabel(storeId)}</span>
         <span id="subaccount-status-${storeId}" class="subaccount-status-value">Not configured — click Store Bank Accounts</span>
       </div>`).join('');
-    section.innerHTML = `<div class="subaccount-status-title">Payment Split Status</div>${rows}`;
+    section.innerHTML = `<div class="subaccount-status-title">Account Status</div>${rows}`;
   }
 
   try {
     const snap = await getDoc(doc(headAdminDb, 'transferSettings', 'stores'));
     if (!snap.exists()) return;
     const data = snap.data();
-    getStoreIds().forEach(storeId => {
+    visibleStores.forEach(storeId => {
       const s  = data[storeId];
       const el = document.getElementById(`subaccount-status-${storeId}`);
       if (el && s?.subaccount_code) {
@@ -809,23 +813,35 @@ window.verifyAndSaveStoreSubaccount = async function(storeId) {
 
   try {
     // Step 1: Confirm the account number is real
-    const verifyRes    = await fnVerifyAccount({ account_number, bank_code });
-    const account_name = verifyRes.data.account_name;
+    const verifyResp = await fetch('/api/verify-account', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ account_number, bank_code })
+    });
+    const verifyData = await verifyResp.json();
+    if (!verifyResp.ok) throw new Error(verifyData.error || 'Account verification failed');
+    const account_name = verifyData.account_name;
     if (nameEl) nameEl.value = account_name;
     if (stEl)   { stEl.textContent = `Verified: ${account_name}. Creating subaccount…`; stEl.style.color = '#d97706'; }
 
     // Step 2: Create / update the Paystack subaccount
     btn.textContent = 'Saving…';
-    const res = await fnSaveSubaccount({ storeId, business_name, bank_code, account_number });
+    const saveResp = await fetch('/api/save-subaccount', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ storeId, business_name, bank_code, account_number })
+    });
+    const res = await saveResp.json();
+    if (!saveResp.ok) throw new Error(res.error || 'Could not save subaccount');
 
     if (stEl) {
-      stEl.textContent = `✓ Subaccount active: ${res.data.business_name} (${account_number})`;
+      stEl.textContent = `✓ Subaccount active: ${res.business_name} (${account_number})`;
       stEl.style.color = '#16a34a';
     }
 
     // Update the badge in the Accounts tab
     const badge = document.getElementById(`subaccount-status-${storeId}`);
-    if (badge) { badge.textContent = `✓ ${res.data.business_name} · ${account_number}`; badge.style.color = '#16a34a'; }
+    if (badge) { badge.textContent = `✓ ${res.business_name} · ${account_number}`; badge.style.color = '#16a34a'; }
 
     notify.success(`${getStoreLabel(storeId)} bank account saved! Payments will now split automatically.`);
 
