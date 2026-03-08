@@ -1,10 +1,15 @@
 import { getFirestore, collection, addDoc, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-import { getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getActiveStore, storeCol, storeDoc } from "./firebase-config.js";
+import { getApps, initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getActiveStore, storeCol, storeDoc, headAdminConfig } from "./firebase-config.js";
 
-// Get Firestore from the same named app that cardstorage.js created
+// Customer Firestore (purchases, reservations, products)
 const app = getApps().find(a => a.name === 'cardstorage') || getApps()[0];
 const db = getFirestore(app);
+
+// Head-admin Firestore — read-only, used to fetch subaccount codes per store
+const haApp = getApps().find(a => a.name === 'head-admin-guard')
+  || initializeApp(headAdminConfig, 'head-admin-guard');
+const haDb = getFirestore(haApp);
 
 // Store-aware collection helpers
 function _col(name)        { return collection(db, storeCol(getActiveStore(), name)); }
@@ -537,6 +542,41 @@ window._paystackOnClose = function() {
 
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  PAYSTACK SPLIT — subaccount codes per store
+//
+//  Each store has a Paystack subaccount stored in the head-admin Firestore at:
+//    transferSettings/stores → { store1: { subaccount_code }, store2: { ... } }
+//
+//  At payment time:
+//    subaccount:         store's subaccount_code   → store gets the remainder
+//    transaction_charge: 10000 kobo (₦100)        → linked account gets ₦100
+//    bearer:             "subaccount"              → store bears Paystack fees
+//
+//  If no subaccount is configured the payment still works — the split is simply
+//  skipped and the full amount settles to the primary Paystack account.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Cache subaccount codes for the session so we don't re-fetch on every payment
+const _subaccountCache = {};
+
+async function getStoreSubaccountCode(storeId) {
+  if (_subaccountCache[storeId]) return _subaccountCache[storeId];
+  try {
+    const snap = await getDoc(doc(haDb, 'transferSettings', 'stores'));
+    if (snap.exists()) {
+      const data = snap.data();
+      // Cache all stores at once
+      Object.keys(data).forEach(id => {
+        if (data[id]?.subaccount_code) _subaccountCache[id] = data[id].subaccount_code;
+      });
+    }
+  } catch (e) {
+    console.warn('Could not fetch subaccount code:', e.message);
+  }
+  return _subaccountCache[storeId] || null;
+}
+
 //  Proceed to payment 
 window.proceedToPayment = async function() {
   if (cart.length === 0) {
@@ -577,13 +617,28 @@ window.proceedToPayment = async function() {
   var paystackRef  = purchaseId.replace(/-/g, '');
   var cartSnapshot = cart.map(function(item) { return Object.assign({}, item); });
 
+  // Fetch this store's Paystack subaccount code for the split
+  var activeStore      = getActiveStore();
+  var subaccountCode   = await getStoreSubaccountCode(activeStore);
+
+  // ₦100 flat charge to the linked (primary) account in kobo
+  var LINKED_CHARGE_KOBO = 10000;
+
+  // Only apply split if the total exceeds ₦100 and a subaccount is configured
+  var applySplit = subaccountCode && (total * 100) > LINKED_CHARGE_KOBO;
+
+  if (subaccountCode && !applySplit) {
+    notify.warning('Order total must be more than ₦100 to apply the store split.');
+  }
+
   _paystackPayload = {
     purchaseId:   purchaseId,
     cartSnapshot: cartSnapshot,
     total:        total
   };
 
-  var handler = PaystackPop.setup({
+  // Build Paystack config — split fields only added when applicable
+  var paystackConfig = {
     key:      PAYSTACK_PUBLIC_KEY,
     email:    userEmail,
     amount:   Math.round(total * 100),
@@ -591,13 +646,24 @@ window.proceedToPayment = async function() {
     ref:      paystackRef,
     metadata: {
       custom_fields: [
-        { display_name: "Purchase ID", variable_name: "purchase_id", value: purchaseId }
+        { display_name: 'Purchase ID',  variable_name: 'purchase_id',  value: purchaseId },
+        { display_name: 'Store',        variable_name: 'store_id',     value: activeStore }
       ]
     },
     callback: window._paystackCallback,
     onClose:  window._paystackOnClose
-  });
+  };
 
+  if (applySplit) {
+    // ₦100 (10000 kobo) goes to the primary linked account
+    // Remainder goes to the store's subaccount
+    // bearer: 'subaccount' means the store's portion covers Paystack's transaction fee
+    paystackConfig.subaccount         = subaccountCode;
+    paystackConfig.transaction_charge = LINKED_CHARGE_KOBO;
+    paystackConfig.bearer             = 'subaccount';
+  }
+
+  var handler = PaystackPop.setup(paystackConfig);
   handler.openIframe();
 }
 

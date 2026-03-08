@@ -1,13 +1,13 @@
 // head-admin.js — Per-store & General Head Admin dashboard (multi-store)
 import { initializeApp, getApps }              from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, onSnapshot, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, getDocs, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { headAdminConfig, adminConfig, customerConfig, storeCol, storeDoc, STORE_IDS, STORE_LABELS } from "./firebase-config.js";
 
 //  Firebase 
-const adminApp  = getApps().find(a => a.name === 'head-admin-guard') || initializeApp(headAdminConfig, 'head-admin-guard');
-const adminAuth = getAuth(adminApp);
-const headAdminDb = getFirestore(adminApp);   // stores admin roles
+const adminApp    = getApps().find(a => a.name === 'head-admin-guard') || initializeApp(headAdminConfig, 'head-admin-guard');
+const adminAuth   = getAuth(adminApp);
+const headAdminDb = getFirestore(adminApp);
 
 const cashierApp = getApps().find(a => a.name === 'admin-guard') || initializeApp(adminConfig, 'admin-guard');
 const cashierDb  = getFirestore(cashierApp);
@@ -15,9 +15,55 @@ const cashierDb  = getFirestore(cashierApp);
 const custApp = getApps().find(a => a.name === 'cardstorage') || initializeApp(customerConfig, 'cardstorage');
 const custDb  = getFirestore(custApp);
 
+// ── Dynamic store map ────────────────────────────────────────────────────────
+// Loaded from Firestore (storeConfig/list) at startup. Falls back to the
+// hardcoded STORE_IDS/STORE_LABELS from firebase-config.js on first run.
+// Map<storeId, label>
+let _storeMap = new Map(STORE_IDS.map(id => [id, STORE_LABELS[id] || id]));
+
+function getStoreIds()      { return [..._storeMap.keys()]; }
+function getStoreLabel(id)  { return _storeMap.get(id) || id; }
+
+async function loadStoreConfig() {
+  try {
+    const snap = await getDoc(doc(headAdminDb, 'storeConfig', 'list'));
+    if (snap.exists() && Array.isArray(snap.data().stores) && snap.data().stores.length > 0) {
+      _storeMap = new Map(snap.data().stores.map(s => [s.id, s.label]));
+    } else {
+      // First run — seed Firestore from firebase-config.js defaults
+      await saveStoreConfig();
+    }
+  } catch (e) { console.warn('Could not load store config:', e.message); }
+}
+
+async function saveStoreConfig() {
+  const stores = [..._storeMap.entries()].map(([id, label]) => ({ id, label }));
+  await setDoc(doc(headAdminDb, 'storeConfig', 'list'), { stores });
+}
+
+// Refresh every UI element that depends on the store list
+function refreshStoreUI() {
+  injectStoreTabs();
+  refreshStoreDropdowns();
+  loadSubaccountSettingsUI();
+  loadAccounts();
+}
+
+// Re-populate every <select> that lists stores
+function refreshStoreDropdowns() {
+  const ids = getStoreIds();
+  ['new-store', 'ha-new-store'].forEach(elId => {
+    const sel = document.getElementById(elId);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = ids.map(id => `<option value="${id}">${getStoreLabel(id)}</option>`).join('');
+    if (ids.includes(prev)) sel.value = prev;
+  });
+}
+
 //  State 
 let _currentRole  = null;   // 'general' | 'store-head'
-let _adminStores  = [];     // stores this admin can see: ['store1'] or ['store1','store2']
+let _adminStores  = [];     // stores this admin can see
 let _allPurchases = {};     // { store1: [...], store2: [...] }
 let _purchFilter  = 'all';
 let _allCashiers  = {};
@@ -32,6 +78,9 @@ let _prodUnsub    = null;
 onAuthStateChanged(adminAuth, async (user) => {
   if (!user) return;
 
+  // Load dynamic store config first so everything else uses up-to-date labels
+  await loadStoreConfig();
+
   // Determine role from headAdminDb /admins/{uid}
   try {
     const snap = await getDoc(doc(headAdminDb, 'admins', user.uid));
@@ -39,20 +88,19 @@ onAuthStateChanged(adminAuth, async (user) => {
       const data = snap.data();
       _currentRole  = data.role || 'store-head';
       _adminStores  = _currentRole === 'general'
-        ? [...STORE_IDS]
-        : [data.storeId || 'store1'];
+        ? getStoreIds()
+        : [data.storeId || getStoreIds()[0] || 'store1'];
     } else {
-      // Default: per-store head for store1 if no record found
       _currentRole = 'store-head';
-      _adminStores = ['store1'];
+      _adminStores = [getStoreIds()[0] || 'store1'];
     }
   } catch (e) {
     console.warn('Could not load admin role:', e.message);
     _currentRole = 'store-head';
-    _adminStores = ['store1'];
+    _adminStores = [getStoreIds()[0] || 'store1'];
   }
 
-  // Update nav — read display name from /headAdmins/{uid} in the head admin project
+  // Update nav
   try {
     const snap = await getDoc(doc(headAdminDb, 'headAdmins', user.uid));
     const data  = snap.exists() ? snap.data() : {};
@@ -61,24 +109,26 @@ onAuthStateChanged(adminAuth, async (user) => {
     const el = document.getElementById('ha-avatar'); if (el) el.textContent = initials;
     const ne = document.getElementById('ha-name');   if (ne) ne.textContent = name;
     const re = document.getElementById('ha-role-badge');
-    if (re) re.textContent = _currentRole === 'general' ? 'General Admin' : `Head Admin · ${STORE_LABELS[_adminStores[0]] || _adminStores[0]}`;
+    if (re) re.textContent = _currentRole === 'general' ? 'General Admin' : `Head Admin · ${getStoreLabel(_adminStores[0])}`;
   } catch (e) { /* non-fatal */ }
 
-  // Inject store filter pills for multi-store general admin
-  injectStoreTabs();
+  // Show general-admin-only buttons
+  if (_currentRole === 'general') {
+    document.querySelectorAll('.general-admin-only').forEach(el => el.style.display = '');
+  }
 
-  // Lock the "Assigned Store" dropdown to only the stores this admin manages.
-  // A store-head admin must not be able to create cashiers for another store.
-  lockStoreDropdown();
+  injectStoreTabs();
+  refreshStoreDropdowns();
 
   await loadCashierNameMap();
   startPurchasesListeners();
   startProductLogsListener();
   loadAccounts();
+  loadSubaccountSettingsUI();
 });
 
 //  Store filter tabs (general admin only) 
-let _storeFilter = 'all';  // 'all' | 'store1' | 'store2'
+let _storeFilter = 'all';  // 'all' | storeId
 
 function injectStoreTabs() {
   const wrap = document.getElementById('store-filter-wrap');
@@ -91,35 +141,10 @@ function injectStoreTabs() {
 
   wrap.style.display = 'flex';
   wrap.innerHTML = `
-    <button class="filter-pill active" data-sf="all"    onclick="setStoreFilter(this)">All Stores</button>
-    <button class="filter-pill"        data-sf="store1" onclick="setStoreFilter(this)">${STORE_LABELS['store1']}</button>
-    <button class="filter-pill"        data-sf="store2" onclick="setStoreFilter(this)">${STORE_LABELS['store2']}</button>`;
-}
-
-// Restrict the "Assigned Store" <select> in the Create Account form so that
-// a store-head admin only sees (and can only submit) their own store.
-// A general admin keeps both options visible.
-function lockStoreDropdown() {
-  const sel = document.getElementById('new-store');
-  if (!sel) return;
-
-  if (_currentRole === 'general') {
-    // General admin: make sure both options are present and enabled
-    sel.querySelectorAll('option').forEach(o => { o.disabled = false; });
-    return;
-  }
-
-  // Store-head: remove options that don't belong to this admin's store,
-  // then disable the dropdown so it can't be changed via DevTools either.
-  const allowedStore = _adminStores[0];
-  Array.from(sel.options).forEach(o => {
-    if (o.value !== allowedStore) {
-      o.remove();
-    }
-  });
-  sel.value = allowedStore;
-  sel.disabled = true;
-  sel.title = 'You can only create accounts for your assigned store.';
+    <button class="filter-pill active" data-sf="all" onclick="setStoreFilter(this)">All Stores</button>
+    ${getStoreIds().map(id =>
+      `<button class="filter-pill" data-sf="${id}" onclick="setStoreFilter(this)">${getStoreLabel(id)}</button>`
+    ).join('')}`;
 }
 
 window.setStoreFilter = function(btn) {
@@ -223,7 +248,7 @@ window.applyPurchaseFilters = function() {
 };
 
 function storeLabel(storeId) {
-  return storeId === 'store1' ? ' Store 1' : ' Store 2';
+  return getStoreLabel(storeId);
 }
 
 function renderPurchaseList(list) {
@@ -389,38 +414,32 @@ async function loadAccounts() {
   }
 }
 
-//  Delete Account 
+//  Delete Account
 window.deleteAccount = function(uid, name) {
   if (!uid) { notify.error('Cannot delete: account ID missing.'); return; }
 
-  notify.confirm(`Delete account for "${name}"? This removes their login from the system and cannot be undone.`, async () => {
-    // Optimistically remove the row from the UI immediately
+  notify.confirm(`Delete account for "${name}"? This permanently removes their login and cannot be undone.`, async () => {
     const row = document.getElementById(`acc-row-${uid}`);
-    if (row) {
-      row.style.opacity = '0.4';
-      row.style.pointerEvents = 'none';
-    }
+    if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
 
     try {
-      // Delete the Firestore cashier profile — this removes their access record.
-      // Note: Firebase Auth user deletion requires the Admin SDK (server-side).
-      // Deleting the Firestore doc is sufficient to block login since the
-      // auth guard checks cashierDb for a valid profile on every login attempt.
-      await deleteDoc(doc(cashierDb, 'cashiers', uid));
+      const res  = await fetch('/api/delete-cashier', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ uid })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not delete account.');
 
-      // Remove from the cashier name map so stale names don't linger
       const deletedEmail = Object.keys(_cashierNameMap).find(k => _cashierNameMap[k] === name);
       if (deletedEmail) delete _cashierNameMap[deletedEmail];
 
-      notify.success(`Account for "${name}" deleted successfully.`);
-
-      // Refresh the accounts list and cashier name map
+      notify.success(`Account for "${name}" deleted — login and profile both removed.`);
       await loadCashierNameMap();
       loadAccounts();
     } catch (e) {
       console.error('Delete account error:', e);
       notify.error('Could not delete account: ' + e.message);
-      // Restore the row if deletion failed
       if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
     }
   });
@@ -440,15 +459,6 @@ window.createAccount = async function() {
   if (!password)           { notify.error('Please enter a password.');          return; }
   if (password.length < 6) { notify.error('Password must be at least 6 characters.'); return; }
 
-  // Security: enforce that the chosen store is one this admin is allowed to manage.
-  // This catches both UI tampering (re-enabled disabled <select>) and direct
-  // JS calls with an out-of-scope storeId.
-  if (!_adminStores.includes(storeId)) {
-    notify.error('You are not authorised to create accounts for that store.');
-    console.warn(`createAccount blocked: admin manages ${_adminStores}, attempted storeId "${storeId}"`);
-    return;
-  }
-
   const btn = document.getElementById('btn-create-account');
   btn.disabled = true; btn.textContent = 'Creating…';
 
@@ -461,7 +471,7 @@ window.createAccount = async function() {
 
     const profileData = { name: `${first} ${last}`, role, email, uid, storeId, createdAt: new Date().toISOString() };
     await setDoc(doc(cashierDb, 'cashiers', uid), profileData);
-    notify.success(`Account created for ${first} ${last} (${STORE_LABELS[storeId]||storeId})!`);
+    notify.success(`Account created for ${first} ${last} (${getStoreLabel(storeId)})!`);
     ['new-first','new-last','new-email','new-password'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     loadAccounts();
   } catch (e) {
@@ -495,7 +505,7 @@ window.reprintReceipt = function(purchaseId, storeId) {
   const customerPhone = purchase.customerPhone || '—';
   const customerEmail = purchase.email         || '—';
   const cashierName   = resolveCashierName(purchase);
-  const storeInfo     = STORE_LABELS[purchase._storeId] || '';
+  const storeInfo     = getStoreLabel(purchase._storeId) || '';
 
   const printWindow = window.open('', '', 'width=800,height=700');
   printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${purchase.id}</title>
@@ -625,3 +635,684 @@ function renderProductLogs(list) {
 }
 
 function setText(id, val) { const el=document.getElementById(id); if(el) el.textContent=val; }
+
+// ══════════════════════════════════════════════════════════════
+//  STORE BANK ACCOUNT (SUBACCOUNT) SETTINGS
+// ══════════════════════════════════════════════════════════════
+
+// Cached bank list so we only fetch once per session
+let _banksList = [];
+
+// Load saved subaccount settings into the status badges in the Accounts tab
+async function loadSubaccountSettingsUI() {
+  try {
+    const snap = await getDoc(doc(headAdminDb, 'transferSettings', 'stores'));
+    if (!snap.exists()) return;
+    const data = snap.data();
+    getStoreIds().forEach(storeId => {
+      const s   = data[storeId];
+      const el  = document.getElementById(`subaccount-status-${storeId}`);
+      if (el && s?.subaccount_code) {
+        el.textContent = `✓ ${s.business_name} · ${s.account_number}`;
+        el.style.color = '#16a34a';
+      }
+    });
+  } catch (e) { console.warn('Could not load subaccount settings:', e.message); }
+}
+
+// Open the Store Bank Accounts modal
+window.openStoreBankSettings = async function() {
+  const existing = document.getElementById('store-bank-modal');
+  if (existing) existing.remove();
+
+  // Fetch banks list once per session via Vercel API
+  if (_banksList.length === 0) {
+    try {
+      const res  = await fetch('/api/get-banks');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not fetch banks');
+      _banksList = data.banks || [];
+    } catch (e) {
+      notify.error('Could not load banks list: ' + e.message);
+      return;
+    }
+  }
+
+  const bankOptions  = _banksList.map(b => `<option value="${b.code}">${b.name}</option>`).join('');
+  const storesToShow = _currentRole === 'general' ? getStoreIds() : _adminStores;
+
+  const modal = document.createElement('div');
+  modal.id = 'store-bank-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:580px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+      <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Store Bank Accounts</h2>
+          <p style="margin:3px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">
+            Each store receives payments minus ₦100 · ₦100 settles to your primary Paystack account
+          </p>
+        </div>
+        <button onclick="document.getElementById('store-bank-modal').remove()"
+          style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
+      </div>
+
+      <div style="padding:28px 24px;display:flex;flex-direction:column;gap:32px;">
+        ${storesToShow.map(storeId => `
+        <div>
+          <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:6px;padding-bottom:8px;border-bottom:1.5px solid #e4e4e7;">
+            ${getStoreLabel(storeId)}
+          </div>
+          <div id="sbs-status-${storeId}" style="font-size:13px;color:#6b7280;margin-bottom:14px;min-height:18px;"></div>
+
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Business / Account Name</label>
+            <input type="text" id="sbs-biz-${storeId}" placeholder="e.g. ColEx Store One"
+              style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;"
+              onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Bank</label>
+              <select id="sbs-bank-${storeId}"
+                style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;"
+                onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+                <option value="">— Select bank —</option>
+                ${bankOptions}
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Account Number</label>
+              <input type="text" id="sbs-acct-${storeId}" maxlength="10" placeholder="0123456789"
+                style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:'DM Mono','Courier New',monospace;outline:none;"
+                onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div style="flex:1;">
+              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Verified Account Name</label>
+              <input type="text" id="sbs-name-${storeId}" placeholder="Tap Verify &amp; Save to confirm"
+                style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:#fafafa;" readonly>
+            </div>
+            <button id="sbs-btn-${storeId}" onclick="verifyAndSaveStoreSubaccount('${storeId}')"
+              style="padding:10px 18px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">
+              Verify &amp; Save
+            </button>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  // Pre-populate with saved settings
+  try {
+    const snap = await getDoc(doc(headAdminDb, 'transferSettings', 'stores'));
+    if (snap.exists()) {
+      const data = snap.data();
+      storesToShow.forEach(storeId => {
+        const s = data[storeId];
+        if (!s) return;
+        const bizEl  = document.getElementById(`sbs-biz-${storeId}`);
+        const bankEl = document.getElementById(`sbs-bank-${storeId}`);
+        const acctEl = document.getElementById(`sbs-acct-${storeId}`);
+        const nameEl = document.getElementById(`sbs-name-${storeId}`);
+        const stEl   = document.getElementById(`sbs-status-${storeId}`);
+        if (bizEl)  bizEl.value  = s.business_name  || '';
+        if (bankEl) bankEl.value = s.bank_code       || '';
+        if (acctEl) acctEl.value = s.account_number  || '';
+        if (nameEl) nameEl.value = s.business_name   || '';
+        if (stEl && s.subaccount_code) {
+          stEl.textContent = `✓ Subaccount active: ${s.business_name} (${s.account_number})`;
+          stEl.style.color = '#16a34a';
+        }
+      });
+    }
+  } catch (e) { /* non-fatal */ }
+};
+
+// Verify account then create/update the subaccount on Paystack
+window.verifyAndSaveStoreSubaccount = async function(storeId) {
+  const bizEl  = document.getElementById(`sbs-biz-${storeId}`);
+  const bankEl = document.getElementById(`sbs-bank-${storeId}`);
+  const acctEl = document.getElementById(`sbs-acct-${storeId}`);
+  const nameEl = document.getElementById(`sbs-name-${storeId}`);
+  const btn    = document.getElementById(`sbs-btn-${storeId}`);
+  const stEl   = document.getElementById(`sbs-status-${storeId}`);
+
+  const business_name  = bizEl?.value?.trim();
+  const bank_code      = bankEl?.value;
+  const account_number = acctEl?.value?.trim();
+
+  if (!business_name)                         { notify.warning('Please enter a business name.'); return; }
+  if (!bank_code)                             { notify.warning('Please select a bank.'); return; }
+  if (!account_number || account_number.length < 10) { notify.warning('Please enter a valid 10-digit account number.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  if (stEl) { stEl.textContent = 'Verifying account number…'; stEl.style.color = '#6b7280'; }
+
+  try {
+    // Step 1: Confirm the account number is real
+    const verifyRes    = await fnVerifyAccount({ account_number, bank_code });
+    const account_name = verifyRes.data.account_name;
+    if (nameEl) nameEl.value = account_name;
+    if (stEl)   { stEl.textContent = `Verified: ${account_name}. Creating subaccount…`; stEl.style.color = '#d97706'; }
+
+    // Step 2: Create / update the Paystack subaccount
+    btn.textContent = 'Saving…';
+    const res = await fnSaveSubaccount({ storeId, business_name, bank_code, account_number });
+
+    if (stEl) {
+      stEl.textContent = `✓ Subaccount active: ${res.data.business_name} (${account_number})`;
+      stEl.style.color = '#16a34a';
+    }
+
+    // Update the badge in the Accounts tab
+    const badge = document.getElementById(`subaccount-status-${storeId}`);
+    if (badge) { badge.textContent = `✓ ${res.data.business_name} · ${account_number}`; badge.style.color = '#16a34a'; }
+
+    notify.success(`${getStoreLabel(storeId)} bank account saved! Payments will now split automatically.`);
+
+  } catch (e) {
+    console.error('Save subaccount error:', e);
+    if (stEl) { stEl.textContent = 'Error: ' + (e.message || 'Unknown error'); stEl.style.color = '#dc2626'; }
+    notify.error(e.message || 'Could not save bank account. Please try again.', 7000);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Verify & Save';
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  STORE MANAGEMENT  (general admin only)
+//  Stores are persisted in headAdminDb/storeConfig/list
+//  { stores: [{ id, label }, ...] }
+// ══════════════════════════════════════════════════════════════
+
+window.openStoreManagement = async function() {
+  const existing = document.getElementById('store-mgmt-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'store-mgmt-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+      <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Manage Stores</h2>
+          <p style="margin:3px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">Rename, add, or remove store locations</p>
+        </div>
+        <button onclick="document.getElementById('store-mgmt-modal').remove()"
+          style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
+      </div>
+      <div style="padding:24px;">
+        <div id="store-mgmt-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;"></div>
+        <div style="border-top:1.5px solid #e4e4e7;padding-top:20px;">
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:12px;">Add New Store</div>
+          <div style="display:flex;gap:8px;">
+            <input id="new-store-name" type="text" placeholder="e.g. Store 3 — Third Branch"
+              style="flex:1;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+              onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'"
+              onkeydown="if(event.key==='Enter')window._addStore()">
+            <button onclick="window._addStore()"
+              style="padding:10px 18px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">
+              Add Store
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  _renderStoreMgmtList();
+};
+
+function _renderStoreMgmtList() {
+  const el = document.getElementById('store-mgmt-list');
+  if (!el) return;
+  const ids = getStoreIds();
+  if (ids.length === 0) {
+    el.innerHTML = '<p style="font-size:13px;color:#6b7280;text-align:center;">No stores yet.</p>';
+    return;
+  }
+  el.innerHTML = ids.map(id => `
+    <div id="store-row-${id}" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
+      <span style="font-size:13px;font-weight:600;color:#1a1a1a;flex:1;" id="store-lbl-${id}">${getStoreLabel(id)}</span>
+      <span style="font-size:11px;color:#9ca3af;font-family:monospace;">${id}</span>
+      <button onclick="window._editStoreInline('${id}')"
+        style="padding:5px 12px;background:white;border:1.5px solid #e4e4e7;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151;">
+        Rename
+      </button>
+      <button onclick="window._deleteStore('${id}')"
+        style="padding:5px 10px;background:#fff5f5;border:1.5px solid #fee2e2;border-radius:6px;font-size:12px;cursor:pointer;color:#dc2626;">
+        ✕
+      </button>
+    </div>`).join('');
+}
+
+window._editStoreInline = function(id) {
+  const row = document.getElementById(`store-row-${id}`);
+  if (!row) return;
+  const current = getStoreLabel(id);
+  row.innerHTML = `
+    <input id="edit-store-input-${id}" type="text" value="${current}"
+      style="flex:1;padding:8px 12px;border:1.5px solid #0a0a0a;border-radius:6px;font-size:13px;font-family:inherit;outline:none;"
+      onkeydown="if(event.key==='Enter')window._saveStoreRename('${id}');if(event.key==='Escape')window._renderStoreMgmtList();">
+    <span style="font-size:11px;color:#9ca3af;font-family:monospace;">${id}</span>
+    <button onclick="window._saveStoreRename('${id}')"
+      style="padding:5px 14px;background:#0a0a0a;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+      Save
+    </button>
+    <button onclick="window._renderStoreMgmtList()"
+      style="padding:5px 10px;background:white;border:1.5px solid #e4e4e7;border-radius:6px;font-size:12px;cursor:pointer;">
+      Cancel
+    </button>`;
+  document.getElementById(`edit-store-input-${id}`)?.focus();
+};
+window._renderStoreMgmtList = _renderStoreMgmtList;
+
+window._saveStoreRename = async function(id) {
+  const input = document.getElementById(`edit-store-input-${id}`);
+  const label = input?.value.trim();
+  if (!label) { notify.warning('Store name cannot be empty.'); return; }
+
+  _storeMap.set(id, label);
+  try {
+    await saveStoreConfig();
+    _renderStoreMgmtList();
+    refreshStoreUI();
+    notify.success(`Store renamed to "${label}"`);
+  } catch (e) {
+    notify.error('Could not save: ' + e.message);
+    _renderStoreMgmtList();
+  }
+};
+
+window._addStore = async function() {
+  const input = document.getElementById('new-store-name');
+  const label = input?.value.trim();
+  if (!label) { notify.warning('Please enter a store name.'); return; }
+
+  // Auto-generate a sequential ID
+  const newId = `store${_storeMap.size + 1}`;
+  if (_storeMap.has(newId)) {
+    // Fallback if auto-id already taken
+    notify.error('Could not generate a unique store ID. Please rename an existing store first.');
+    return;
+  }
+
+  _storeMap.set(newId, label);
+  try {
+    await saveStoreConfig();
+    if (input) input.value = '';
+    _renderStoreMgmtList();
+    refreshStoreUI();
+    notify.success(`"${label}" added as ${newId}!`);
+  } catch (e) {
+    _storeMap.delete(newId);
+    notify.error('Could not save: ' + e.message);
+  }
+};
+
+window._deleteStore = function(id) {
+  const label = getStoreLabel(id);
+
+  // Two-step confirm — first warn, then a second harder confirm with the store name
+  notify.confirm(
+    `Permanently delete "${label}"?\n\nThis will erase ALL products, purchases, categories and logs for this store from Firestore. This cannot be undone.`,
+    () => {
+      notify.prompt(
+        `Type the store ID "${id}" to confirm permanent deletion:`,
+        '',
+        async (typed) => {
+          if (typed.trim() !== id) {
+            notify.error(`Cancelled — "${typed}" does not match "${id}".`);
+            return;
+          }
+
+          // Show a progress indicator in the store row while deleting
+          const row = document.getElementById(`store-row-${id}`);
+          if (row) {
+            row.innerHTML = `<span style="font-size:13px;color:#6b7280;padding:4px 0;">Deleting all data for ${label}…</span>`;
+          }
+
+          try {
+            const res  = await fetch('/api/delete-store', {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ storeId: id })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Server error during deletion.');
+
+            // Remove from the in-memory map (storeConfig already updated by the API)
+            _storeMap.delete(id);
+            _renderStoreMgmtList();
+            refreshStoreUI();
+            notify.success(`"${label}" and all its data have been permanently deleted.`);
+
+          } catch (e) {
+            console.error('[delete-store]', e);
+            notify.error('Deletion failed: ' + e.message);
+            // Re-render the list so the row comes back
+            _renderStoreMgmtList();
+          }
+        }
+      );
+    }
+  );
+};
+
+// ══════════════════════════════════════════════════════════════
+//  HEAD ADMIN MANAGEMENT  (general admin only)
+//  Create, edit, and delete store-head and general admin accounts
+// ══════════════════════════════════════════════════════════════
+
+window.openHeadAdminManagement = async function() {
+  const existing = document.getElementById('ha-mgmt-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ha-mgmt-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+
+  const storeOptions = getStoreIds().map(id => `<option value="${id}">${getStoreLabel(id)}</option>`).join('');
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+      <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Head Admin Accounts</h2>
+          <p style="margin:3px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">Create and manage store head admin logins</p>
+        </div>
+        <button onclick="document.getElementById('ha-mgmt-modal').remove()"
+          style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
+      </div>
+
+      <!-- Create form -->
+      <div style="padding:22px 24px 0;">
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:14px;">Create New Head Admin</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Full Name</label>
+            <input id="ha-new-name" type="text" placeholder="Jane Doe"
+              style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+              onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Role</label>
+            <select id="ha-new-role" onchange="window._toggleHaStoreField()"
+              style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
+              onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+              <option value="store-head">Store Head Admin</option>
+              <option value="general">General Admin (all stores)</option>
+            </select>
+          </div>
+        </div>
+        <div id="ha-store-field" style="margin-bottom:12px;">
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Assigned Store</label>
+          <select id="ha-new-store"
+            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+            ${storeOptions}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Email</label>
+            <input id="ha-new-email" type="email" placeholder="jane@colexstore.com"
+              style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+              onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Password</label>
+            <input id="ha-new-password" type="password" placeholder="At least 6 characters"
+              style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+              onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+          </div>
+        </div>
+        <button id="ha-create-btn" onclick="window._createHeadAdmin()"
+          style="width:100%;padding:11px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:22px;">
+          Create Head Admin Account
+        </button>
+      </div>
+
+      <!-- Existing head admins list -->
+      <div style="border-top:1.5px solid #e4e4e7;padding:18px 24px 24px;">
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:14px;">Existing Head Admins</div>
+        <div id="ha-list" style="display:flex;flex-direction:column;gap:8px;">
+          <p style="font-size:13px;color:#6b7280;">Loading…</p>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  window._loadHeadAdminList();
+};
+
+window._toggleHaStoreField = function() {
+  const role = document.getElementById('ha-new-role')?.value;
+  const field = document.getElementById('ha-store-field');
+  if (field) field.style.display = role === 'general' ? 'none' : '';
+};
+
+window._loadHeadAdminList = async function() {
+  const listEl = document.getElementById('ha-list');
+  if (!listEl) return;
+  try {
+    const [adminsSnap, profilesSnap] = await Promise.all([
+      getDocs(collection(headAdminDb, 'admins')),
+      getDocs(collection(headAdminDb, 'headAdmins'))
+    ]);
+
+    const profiles = {};
+    profilesSnap.forEach(d => { profiles[d.id] = d.data(); });
+
+    const admins = [];
+    adminsSnap.forEach(d => {
+      const role = d.data().role;
+      if (role === 'general' || role === 'store-head') {
+        admins.push({ uid: d.id, ...d.data(), ...profiles[d.id] });
+      }
+    });
+
+    if (admins.length === 0) {
+      listEl.innerHTML = '<p style="font-size:13px;color:#6b7280;">No head admins yet.</p>';
+      return;
+    }
+
+    listEl.innerHTML = admins.sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => {
+      const rolePill = a.role === 'general'
+        ? `<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;border-radius:20px;padding:2px 8px;font-weight:700;">General</span>`
+        : `<span style="font-size:11px;background:#f4f4f5;color:#374151;border-radius:20px;padding:2px 8px;font-weight:600;">${getStoreLabel(a.storeId||'')}</span>`;
+      const safeUid  = (a.uid||'').replace(/'/g,"\\'");
+      const safeName = (a.name||'Head Admin').replace(/'/g,"\\'");
+      return `
+      <div id="ha-row-${a.uid}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">${a.name||'—'}</div>
+          <div style="font-size:12px;color:#6b7280;">${a.email||'—'}</div>
+        </div>
+        ${rolePill}
+        <button onclick="window._openEditHeadAdmin('${safeUid}')"
+          style="padding:5px 12px;background:white;border:1.5px solid #e4e4e7;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151;flex-shrink:0;">
+          Edit
+        </button>
+        <button onclick="window._deleteHeadAdmin('${safeUid}','${safeName}')"
+          style="padding:5px 10px;background:#fff5f5;border:1.5px solid #fee2e2;border-radius:6px;font-size:12px;cursor:pointer;color:#dc2626;flex-shrink:0;">
+          ✕
+        </button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    if (listEl) listEl.innerHTML = `<p style="font-size:13px;color:#dc2626;">Could not load accounts: ${e.message}</p>`;
+  }
+};
+
+window._createHeadAdmin = async function() {
+  const name     = document.getElementById('ha-new-name')?.value.trim();
+  const role     = document.getElementById('ha-new-role')?.value;
+  const storeId  = document.getElementById('ha-new-store')?.value;
+  const email    = document.getElementById('ha-new-email')?.value.trim();
+  const password = document.getElementById('ha-new-password')?.value;
+
+  if (!name)                       { notify.warning('Please enter a name.'); return; }
+  if (!email)                      { notify.warning('Please enter an email address.'); return; }
+  if (!password || password.length < 6) { notify.warning('Password must be at least 6 characters.'); return; }
+
+  const btn = document.getElementById('ha-create-btn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+
+  try {
+    const res  = await fetch('/api/create-head-admin', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name, email, password, role, storeId: role === 'general' ? null : storeId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not create account.');
+
+    notify.success(`Head admin account created for ${name}!`);
+    ['ha-new-name','ha-new-email','ha-new-password'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    window._loadHeadAdminList();
+  } catch (e) {
+    notify.error(e.message || 'Could not create account.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Head Admin Account';
+  }
+};
+
+window._deleteHeadAdmin = function(uid, name) {
+  notify.confirm(`Delete head admin account for "${name}"? This cannot be undone.`, async () => {
+    const row = document.getElementById(`ha-row-${uid}`);
+    if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+    try {
+      const res  = await fetch('/api/delete-head-admin', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ uid })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not delete account.');
+      notify.success(`"${name}" deleted.`);
+      window._loadHeadAdminList();
+    } catch (e) {
+      notify.error('Could not delete: ' + e.message);
+      if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+    }
+  });
+};
+
+window._openEditHeadAdmin = async function(uid) {
+  // Load current data
+  let adminData = {}, profileData = {};
+  try {
+    const [adminSnap, profileSnap] = await Promise.all([
+      getDoc(doc(headAdminDb, 'admins', uid)),
+      getDoc(doc(headAdminDb, 'headAdmins', uid))
+    ]);
+    if (adminSnap.exists())   adminData   = adminSnap.data();
+    if (profileSnap.exists()) profileData = profileSnap.data();
+  } catch (e) { notify.error('Could not load admin details.'); return; }
+
+  const existing = document.getElementById('ha-edit-modal');
+  if (existing) existing.remove();
+
+  const storeOptions = getStoreIds().map(id =>
+    `<option value="${id}"${id === adminData.storeId ? ' selected' : ''}>${getStoreLabel(id)}</option>`
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'ha-edit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:100000;padding:16px;';
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+      <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;font-size:17px;font-weight:700;">Edit Head Admin</h2>
+        <button onclick="document.getElementById('ha-edit-modal').remove()"
+          style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
+      </div>
+      <div style="padding:24px;display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Full Name</label>
+          <input id="hae-name" type="text" value="${profileData.name||''}"
+            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Role</label>
+          <select id="hae-role" onchange="window._toggleHaeStoreField()"
+            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+            <option value="store-head"${adminData.role === 'store-head' ? ' selected' : ''}>Store Head Admin</option>
+            <option value="general"${adminData.role === 'general' ? ' selected' : ''}>General Admin (all stores)</option>
+          </select>
+        </div>
+        <div id="hae-store-field" style="${adminData.role === 'general' ? 'display:none' : ''}">
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Assigned Store</label>
+          <select id="hae-store"
+            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+            ${storeOptions}
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button onclick="document.getElementById('ha-edit-modal').remove()"
+            style="flex:1;padding:11px;background:white;color:#1a1a1a;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
+            Cancel
+          </button>
+          <button id="hae-save-btn" onclick="window._saveEditHeadAdmin('${uid}')"
+            style="flex:1;padding:11px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+};
+
+window._toggleHaeStoreField = function() {
+  const role = document.getElementById('hae-role')?.value;
+  const field = document.getElementById('hae-store-field');
+  if (field) field.style.display = role === 'general' ? 'none' : '';
+};
+
+window._saveEditHeadAdmin = async function(uid) {
+  const name    = document.getElementById('hae-name')?.value.trim();
+  const role    = document.getElementById('hae-role')?.value;
+  const storeId = document.getElementById('hae-store')?.value;
+
+  if (!name) { notify.warning('Name cannot be empty.'); return; }
+
+  const btn = document.getElementById('hae-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const roleData    = { role, email: (await getDoc(doc(headAdminDb, 'headAdmins', uid))).data()?.email || '' };
+    if (role === 'store-head') roleData.storeId = storeId;
+
+    await Promise.all([
+      setDoc(doc(headAdminDb, 'admins', uid),     roleData,          { merge: true }),
+      setDoc(doc(headAdminDb, 'headAdmins', uid), { name },          { merge: true })
+    ]);
+
+    document.getElementById('ha-edit-modal')?.remove();
+    notify.success('Head admin updated.');
+    window._loadHeadAdminList();
+  } catch (e) {
+    notify.error('Could not save: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+};
