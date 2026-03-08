@@ -335,19 +335,22 @@ async function savePurchase(purchaseData) {
   }
 }
 
-function showQRCodeModal(purchaseId, items, total) {
+function showQRCodeModal(purchaseId, items, total, serviceCharge, cartSubtotal) {
   const modal = document.createElement('div');
   modal.className = 'qr-modal';
   modal.id = 'qr-modal';
-  
-  const itemsList = items.map(item => 
-    `${item.quantity}x ${item.name} @ ₦${item.price}`
+
+  const storeId    = getActiveStore();
+  const storeLabel = sessionStorage.getItem('storeLabel_' + storeId) || storeId;
+
+  const itemsList = items.map(item =>
+    `${item.quantity}x ${item.name} @ ₦${parseFloat(item.price).toFixed(2)}`
   ).join('<br>');
-  
+
   modal.innerHTML = `
     <div class="qr-modal-content">
       <div class="qr-header">
-        <h2> Purchase Successful!</h2>
+        <h2>Purchase Successful!</h2>
         <button onclick="closeQRModal()" class="close-modal">×</button>
       </div>
       <div class="qr-body">
@@ -359,30 +362,32 @@ function showQRCodeModal(purchaseId, items, total) {
         </div>
         <div class="qr-code-container">
           <div id="qrcode"></div>
-          <p class="qr-instruction">Show this QR code or ID to admin for verification</p>
+          <p class="qr-instruction">Show this QR code or ID to the cashier for verification</p>
         </div>
         <div class="modal-actions">
-          <button onclick="downloadQR('${purchaseId}')" class="btn-download">Download QR</button>
+          <button onclick="downloadReceiptPDF('${purchaseId}')" class="btn-download">Download Receipt</button>
           <button onclick="closeQRModal()" class="btn-done">Done</button>
         </div>
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(modal);
 
-  // Small delay so the #qrcode element is in the DOM before QRCode targets it
+  // Store receipt data on the modal so downloadReceiptPDF can read it
+  modal._receiptData = { purchaseId, items, total, serviceCharge, cartSubtotal, storeLabel };
+
   setTimeout(() => {
-    new QRCode(document.getElementById("qrcode"), {
-      text: purchaseId,
-      width: 200,
-      height: 200,
-      colorDark: "#000000",
-      colorLight: "#ffffff",
+    new QRCode(document.getElementById('qrcode'), {
+      text:         purchaseId,
+      width:        200,
+      height:       200,
+      colorDark:    '#000000',
+      colorLight:   '#ffffff',
       correctLevel: QRCode.CorrectLevel.H
     });
   }, 50);
-  
+
   setTimeout(() => modal.classList.add('active'), 10);
 }
 
@@ -392,43 +397,226 @@ window.closeQRModal = function() {
     modal.classList.remove('active');
     setTimeout(() => modal.remove(), 300);
   }
-}
+};
 
-window.downloadQR = function(purchaseId) {
+window.downloadReceiptPDF = function(purchaseId) {
+  const modal = document.getElementById('qr-modal');
+  const data  = modal && modal._receiptData;
+  if (!data) return;
+
+  // Get QR code as a base64 image from the canvas QRCode.js rendered
   const qrCanvas = document.querySelector('#qrcode canvas');
-  if (!qrCanvas) return;
+  const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : '';
 
-  // Create a composite canvas: ID label on top, QR code below
-  const padding  = 16;
-  const fontSize = 18;
-  const lineH    = fontSize + 8;
-  const totalH   = lineH + padding + qrCanvas.height + padding;
-  const totalW   = Math.max(qrCanvas.width + padding * 2, 260);
+  const { items, total, serviceCharge, cartSubtotal, storeLabel } = data;
+  const dateStr = new Date().toLocaleDateString('en-NG', {
+    day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
 
-  const out = document.createElement('canvas');
-  out.width  = totalW;
-  out.height = totalH;
-  const ctx = out.getContext('2d');
+  // Build item rows
+  const itemRows = items.map(item => {
+    const price    = parseFloat(item.price);
+    const subtotal = price * item.quantity;
+    return `
+      <tr>
+        <td>${item.name}</td>
+        <td style="text-align:center;">${item.quantity}</td>
+        <td style="text-align:right;">₦${price.toFixed(2)}</td>
+        <td style="text-align:right;">₦${subtotal.toFixed(2)}</td>
+      </tr>`;
+  }).join('');
 
-  // White background
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, totalW, totalH);
+  // Service charge rows — only shown when a split is active
+  const chargeRows = (serviceCharge && serviceCharge > 0) ? `
+      <tr style="border-top:1px solid #e4e4e7;">
+        <td colspan="3" style="text-align:right;color:#6b7280;">Subtotal</td>
+        <td style="text-align:right;color:#6b7280;">₦${(cartSubtotal || (total - serviceCharge)).toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td colspan="3" style="text-align:right;color:#6b7280;">Service Charge</td>
+        <td style="text-align:right;color:#6b7280;">₦${serviceCharge.toFixed(2)}</td>
+      </tr>` : '';
 
-  // Purchase ID text centred at top
-  ctx.fillStyle = '#111111';
-  ctx.font      = `bold ${fontSize}px "Courier New", monospace`;
-  ctx.textAlign = 'center';
-  ctx.fillText(purchaseId, totalW / 2, padding + fontSize);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ColEx Receipt — ${purchaseId}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #fff;
+      color: #111;
+      padding: 40px 48px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
 
-  // QR code centred below the label
-  const qrX = (totalW - qrCanvas.width) / 2;
-  ctx.drawImage(qrCanvas, qrX, padding + lineH);
+    /* ── Header ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #0a0a0a;
+    }
+    .brand-name  { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+    .brand-store { font-size: 13px; color: #6b7280; margin-top: 4px; }
+    .receipt-label {
+      text-align: right;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: #6b7280;
+    }
+    .receipt-date { font-size: 13px; color: #111; margin-top: 4px; }
 
-  const link = document.createElement('a');
-  link.download = `purchase-${purchaseId}.png`;
-  link.href = out.toDataURL('image/png');
-  link.click();
-}
+    /* ── QR + ID section ── */
+    .qr-section {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      background: #f4f4f5;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+    }
+    .qr-section img { width: 110px; height: 110px; flex-shrink: 0; }
+    .qr-text-block { flex: 1; }
+    .qr-id-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #6b7280; margin-bottom: 6px; }
+    .qr-id {
+      font-family: 'Courier New', monospace;
+      font-size: 17px; font-weight: 700;
+      color: #0a0a0a;
+      word-break: break-all;
+      line-height: 1.4;
+    }
+    .qr-hint { font-size: 11px; color: #9ca3af; margin-top: 8px; }
+
+    /* ── Items table ── */
+    .section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: #6b7280;
+      margin-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    thead tr {
+      background: #0a0a0a; color: #fff;
+    }
+    thead th {
+      padding: 9px 12px;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    thead th:first-child  { text-align: left; border-radius: 6px 0 0 6px; }
+    thead th:last-child   { text-align: right; border-radius: 0 6px 6px 0; }
+    tbody tr td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e4e4e7;
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+
+    /* ── Total row ── */
+    .total-row td {
+      padding: 12px 12px;
+      font-size: 16px; font-weight: 800;
+      border-top: 2px solid #0a0a0a !important;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 32px;
+      padding-top: 18px;
+      border-top: 1px solid #e4e4e7;
+      text-align: center;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.8;
+    }
+
+    @media print {
+      body { padding: 20px; }
+      @page { margin: 12mm; size: A5 portrait; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="brand-name">ColEx</div>
+      <div class="brand-store">${storeLabel}</div>
+    </div>
+    <div class="receipt-label">
+      Payment Receipt
+      <div class="receipt-date">${dateStr}</div>
+    </div>
+  </div>
+
+  <!-- QR Code + Purchase ID -->
+  <div class="qr-section">
+    ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code">` : ''}
+    <div class="qr-text-block">
+      <div class="qr-id-label">Purchase ID</div>
+      <div class="qr-id">${purchaseId}</div>
+      <div class="qr-hint">Show this to the cashier to collect your order</div>
+    </div>
+  </div>
+
+  <!-- Items -->
+  <div class="section-title">Items Purchased</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th style="text-align:center;">Qty</th>
+        <th style="text-align:right;">Unit Price</th>
+        <th style="text-align:right;">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemRows}
+      ${chargeRows}
+      <tr class="total-row">
+        <td colspan="3" style="text-align:right;">Total Paid</td>
+        <td style="text-align:right;">₦${total.toFixed(2)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Footer -->
+  <div class="footer">
+    Thank you for shopping at ColEx · ${storeLabel}<br>
+    Keep this receipt until your order is collected
+  </div>
+
+</body>
+</html>`;
+
+  // Open a new window, write the receipt HTML, then trigger print → Save as PDF
+  const win = window.open('', '_blank', 'width=700,height=900');
+  if (!win) {
+    notify.error('Please allow pop-ups to download the receipt.');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  // Small delay so images (QR) fully load before print dialog opens
+  win.onload = function() { win.print(); };
+  // Fallback if onload already fired
+  setTimeout(() => { try { win.print(); } catch(e) {} }, 600);
+};
 
 // ---------------------------------------------------------------------------
 // Paystack callback & onClose MUST live on window (global scope).
@@ -452,7 +640,7 @@ window._paystackCallback = function(response) {
   _paystackPayload = null; // consume it
 
   // Destructure ALL fields from payload BEFORE nulling it
-  const { purchaseId, cartSnapshot, total } = payload;
+  const { purchaseId, cartSnapshot, total, serviceCharge, cartSubtotal } = payload;
 
   console.log('Payment successful:', response.reference);
 
@@ -523,7 +711,7 @@ window._paystackCallback = function(response) {
   }
 
   // Show QR modal (uses the frozen snapshot, not the now-empty live cart)
-  showQRCodeModal(purchaseId, cartSnapshot, total);
+  showQRCodeModal(purchaseId, cartSnapshot, total, serviceCharge, cartSubtotal);
 
   // Clear the live cart
   cart = [];
@@ -545,16 +733,19 @@ window._paystackOnClose = function() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  PAYSTACK SPLIT — subaccount codes per store
 //
-//  Each store has a Paystack subaccount stored in the head-admin Firestore at:
-//    transferSettings/stores → { store1: { subaccount_code }, store2: { ... } }
+//  Service charge tiers (added ON TOP of cart total — customer pays):
+//    Cart total < ₦1,000   →  ₦50  surcharge
+//    Cart total < ₦10,000  →  ₦100 surcharge
+//    Cart total ≥ ₦10,000  →  ₦150 surcharge
 //
-//  At payment time:
-//    subaccount:         store's subaccount_code   → store gets the remainder
-//    transaction_charge: 10000 kobo (₦100)        → linked account gets ₦100
-//    bearer:             "subaccount"              → store bears Paystack fees
+//  Paystack config:
+//    amount:             (cart total + surcharge) × 100 kobo  — what customer pays
+//    subaccount:         store's subaccount_code              — store receives cart total
+//    transaction_charge: surcharge × 100 kobo                — primary account receives surcharge
+//    bearer:             "account"                           — primary account bears Paystack fees
 //
-//  If no subaccount is configured the payment still works — the split is simply
-//  skipped and the full amount settles to the primary Paystack account.
+//  If no subaccount is configured the surcharge is still added to the customer's
+//  total (it all settles to the primary Paystack account).
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Cache subaccount codes for the session so we don't re-fetch on every payment
@@ -566,7 +757,6 @@ async function getStoreSubaccountCode(storeId) {
     const snap = await getDoc(doc(haDb, 'transferSettings', 'stores'));
     if (snap.exists()) {
       const data = snap.data();
-      // Cache all stores at once
       Object.keys(data).forEach(id => {
         if (data[id]?.subaccount_code) _subaccountCache[id] = data[id].subaccount_code;
       });
@@ -575,6 +765,13 @@ async function getStoreSubaccountCode(storeId) {
     console.warn('Could not fetch subaccount code:', e.message);
   }
   return _subaccountCache[storeId] || null;
+}
+
+// Returns the service charge (in naira) to add on top of the cart total
+function getServiceCharge(cartTotal) {
+  if (cartTotal < 1000)  return 50;
+  if (cartTotal < 10000) return 100;
+  return 150;
 }
 
 //  Proceed to payment 
@@ -612,55 +809,51 @@ window.proceedToPayment = async function() {
     } catch(e) { console.warn('Could not load profile for receipt:', e.message); }
   }
 
-  var total        = calculateTotal();
-  var purchaseId   = generatePurchaseId();
-  var paystackRef  = purchaseId.replace(/-/g, '');
-  var cartSnapshot = cart.map(function(item) { return Object.assign({}, item); });
+  var cartTotal      = calculateTotal();
+  var serviceCharge  = getServiceCharge(cartTotal);
+  var grandTotal     = cartTotal + serviceCharge;   // what the customer actually pays
+  var purchaseId     = generatePurchaseId();
+  var paystackRef    = purchaseId.replace(/-/g, '');
+  var cartSnapshot   = cart.map(function(item) { return Object.assign({}, item); });
 
   // Fetch this store's Paystack subaccount code for the split
-  var activeStore      = getActiveStore();
-  var subaccountCode   = await getStoreSubaccountCode(activeStore);
+  var activeStore    = getActiveStore();
+  var subaccountCode = await getStoreSubaccountCode(activeStore);
 
-  // ₦100 flat charge to the linked (primary) account in kobo
-  var LINKED_CHARGE_KOBO = 10000;
-
-  // Only apply split if the total exceeds ₦100 and a subaccount is configured
-  var applySplit = subaccountCode && (total * 100) > LINKED_CHARGE_KOBO;
-
-  if (subaccountCode && !applySplit) {
-    notify.warning('Order total must be more than ₦100 to apply the store split.');
-  }
-
+  // Store grandTotal (items + surcharge) so receipts reflect what was paid
   _paystackPayload = {
-    purchaseId:   purchaseId,
-    cartSnapshot: cartSnapshot,
-    total:        total
+    purchaseId:    purchaseId,
+    cartSnapshot:  cartSnapshot,
+    total:         grandTotal,
+    serviceCharge: serviceCharge,
+    cartSubtotal:  cartTotal
   };
 
-  // Build Paystack config — split fields only added when applicable
+  // Build Paystack config
   var paystackConfig = {
     key:      PAYSTACK_PUBLIC_KEY,
     email:    userEmail,
-    amount:   Math.round(total * 100),
+    amount:   Math.round(grandTotal * 100),   // customer pays cartTotal + surcharge
     currency: 'NGN',
     ref:      paystackRef,
     metadata: {
       custom_fields: [
-        { display_name: 'Purchase ID',  variable_name: 'purchase_id',  value: purchaseId },
-        { display_name: 'Store',        variable_name: 'store_id',     value: activeStore }
+        { display_name: 'Purchase ID',     variable_name: 'purchase_id',     value: purchaseId },
+        { display_name: 'Store',           variable_name: 'store_id',        value: activeStore },
+        { display_name: 'Service Charge',  variable_name: 'service_charge',  value: '₦' + serviceCharge }
       ]
     },
     callback: window._paystackCallback,
     onClose:  window._paystackOnClose
   };
 
-  if (applySplit) {
-    // ₦100 (10000 kobo) goes to the primary linked account
-    // Remainder goes to the store's subaccount
-    // bearer: 'subaccount' means the store's portion covers Paystack's transaction fee
+  if (subaccountCode) {
+    // Surcharge (in kobo) settles to the primary linked Paystack account
+    // Store subaccount receives the cart subtotal
+    // bearer: 'account' — primary account bears Paystack's own transaction fee
     paystackConfig.subaccount         = subaccountCode;
-    paystackConfig.transaction_charge = LINKED_CHARGE_KOBO;
-    paystackConfig.bearer             = 'subaccount';
+    paystackConfig.transaction_charge = Math.round(serviceCharge * 100);
+    paystackConfig.bearer             = 'account';
   }
 
   var handler = PaystackPop.setup(paystackConfig);
@@ -720,7 +913,7 @@ function updateCartDisplay() {
     if (cart.length === 0) {
       cartItems.innerHTML = '<p style="text-align:center; padding: 20px;">Your cart is empty.</p>';
       if (cartTotal) {
-        cartTotal.innerText = "₦0.00";
+        cartTotal.innerHTML = "₦0.00";
       }
       return;
     } else {
@@ -749,7 +942,13 @@ function updateCartDisplay() {
   }
 
   if (cartTotal) {
-    cartTotal.innerText = `₦${grandTotal.toFixed(2)}`;
+    const charge = cart.length > 0 ? getServiceCharge(grandTotal) : 0;
+    const displayTotal = grandTotal + charge;
+    cartTotal.innerHTML = charge > 0
+      ? `<span style="font-size:13px;color:var(--muted);display:block;margin-bottom:2px;">Subtotal: ₦${grandTotal.toFixed(2)}</span>` +
+        `<span style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">Service charge: ₦${charge.toFixed(2)}</span>` +
+        `₦${displayTotal.toFixed(2)}`
+      : `₦${grandTotal.toFixed(2)}`;
   }
 }
 
