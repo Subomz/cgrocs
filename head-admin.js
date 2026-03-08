@@ -706,10 +706,21 @@ window.openStoreBankSettings = async function() {
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h2 style="margin:0;font-size:18px;font-weight:700;">Store Bank Accounts</h2>
+          <p style="margin:3px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">
+            Each store receives payments minus ₦100 · ₦100 settles to your primary Paystack account
+          </p>
         </div>
         <button onclick="document.getElementById('store-bank-modal').remove()"
           style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
       </div>
+
+      <div style="background:#fef3c7;border-bottom:1.5px solid #fde68a;padding:11px 20px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:15px;flex-shrink:0;">⚠️</span>
+        <span style="font-size:12px;color:#92400e;font-weight:600;line-height:1.5;">
+          Requires a <strong>live</strong> Paystack secret key (<code style="font-family:monospace;background:rgba(0,0,0,0.08);padding:1px 4px;border-radius:3px;">sk_live_...</code>) in your Vercel env variables. Test keys cannot verify real bank accounts.
+        </span>
+      </div>
+
       <div style="padding:28px 24px;display:flex;flex-direction:column;gap:32px;">
         ${storesToShow.map(storeId => `
         <div>
@@ -829,6 +840,20 @@ window.verifyAndSaveStoreSubaccount = async function(storeId) {
     });
     const res = await saveResp.json();
     if (!saveResp.ok) throw new Error(res.error || 'Could not save subaccount');
+
+    // Step 3: Persist to Firestore so data survives tab changes and page reloads
+    await setDoc(
+      doc(headAdminDb, 'transferSettings', 'stores'),
+      {
+        [storeId]: {
+          subaccount_code: res.subaccount_code,
+          business_name:   res.business_name,
+          bank_code,
+          account_number
+        }
+      },
+      { merge: true }   // merge:true preserves other stores' data
+    );
 
     if (stEl) {
       stEl.textContent = `✓ Subaccount active: ${res.business_name} (${account_number})`;
