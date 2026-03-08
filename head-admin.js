@@ -714,6 +714,13 @@ window.openStoreBankSettings = async function() {
           style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
       </div>
 
+      <div style="background:#fef3c7;border-bottom:1.5px solid #fde68a;padding:11px 20px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:15px;flex-shrink:0;">⚠️</span>
+        <span style="font-size:12px;color:#92400e;font-weight:600;line-height:1.5;">
+          Requires a <strong>live</strong> Paystack secret key (<code style="font-family:monospace;background:rgba(0,0,0,0.08);padding:1px 4px;border-radius:3px;">sk_live_...</code>) in your Vercel env variables. Test keys cannot verify real bank accounts.
+        </span>
+      </div>
+
       <div style="padding:28px 24px;display:flex;flex-direction:column;gap:32px;">
         ${storesToShow.map(storeId => `
         <div>
