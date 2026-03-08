@@ -510,3 +510,100 @@ button:disabled {
   }
   .product-grid { width: 100%; box-sizing: border-box; padding: 16px 12px; }
 }
+
+/* ── ORDERS PANEL ─────────────────────────────────────────── */
+.orders-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 99990;
+}
+
+.orders-panel {
+  position: fixed; top: 0; right: 0;
+  height: 100%; width: 100%; max-width: 420px;
+  background: white; z-index: 99991;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+.orders-panel.open { transform: translateX(0); }
+
+.orders-panel-header {
+  background: var(--black); color: white;
+  padding: 18px 20px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+.orders-panel-title { margin: 0; font-size: 18px; font-weight: 700; }
+.orders-panel-sub   { margin: 2px 0 0; font-size: 12px; color: rgba(255,255,255,0.6); }
+
+.orders-panel-close {
+  background: rgba(255,255,255,0.15); border: none; color: white;
+  width: 34px; height: 34px; border-radius: 50%;
+  font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.orders-panel-close:hover { background: rgba(255,255,255,0.28); }
+
+.orders-filter-row {
+  display: flex; gap: 6px; padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0; flex-wrap: wrap;
+}
+
+.orders-list-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+/* ── ORDERS QR MODAL ──────────────────────────────────────── */
+.ord-qr-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999999; padding: 16px;
+}
+
+.ord-qr-modal-box {
+  background: white; border-radius: 16px;
+  max-width: 360px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+
+.ord-qr-modal-header {
+  background: var(--black); color: white;
+  padding: 18px 20px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.ord-qr-modal-title { margin: 0; font-size: 17px; font-weight: 700; }
+
+.ord-qr-modal-close {
+  background: rgba(255,255,255,0.15); border: none; color: white;
+  width: 32px; height: 32px; border-radius: 50%;
+  font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.ord-qr-modal-close:hover { background: rgba(255,255,255,0.28); }
+
+.ord-qr-modal-body { padding: 22px; text-align: center; }
+
+.ord-qr-label {
+  font-size: 12px; color: var(--muted); margin-bottom: 4px;
+}
+.ord-qr-id {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--ink); background: var(--faint);
+  padding: 10px; border-radius: 8px;
+  word-break: break-all; margin-bottom: 14px;
+}
+.ord-qr-items { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.ord-qr-total { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 18px; }
+.ord-qrcode-wrap { display: inline-block; margin-bottom: 10px; }
+.ord-qr-hint { font-size: 11px; color: var(--muted); }
+
+/* ── ORDERS EMPTY / LOADING STATES ───────────────────────── */
+.orders-empty-msg {
+  text-align: center; padding: 30px;
+  color: var(--muted); font-size: 14px;
+}

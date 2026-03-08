@@ -27,10 +27,11 @@ body {
 }
 
 /* ── Nav ── */
-nav {
-  background: var(--black) !important;
-  border-bottom: none;
+.profile-nav {
+  background: var(--black);
   position: sticky; top: 0; z-index: 9999;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 24px; height: 64px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.25);
 }
 .navlogo img { display: block; }

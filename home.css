@@ -75,3 +75,76 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   .home-nav { padding: 0 16px; }
   .product-grid { padding: 16px 12px 32px; }
 }
+
+/* ── Store Picker Modal ──────────────────────────────────── */
+.store-picker-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,10,10,0.82);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 99999; padding: 20px;
+}
+
+.store-picker-box {
+  background: white; border-radius: 20px;
+  max-width: 520px; width: 100%;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+  overflow: hidden;
+  animation: spPopIn .35s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes spPopIn {
+  from { opacity: 0; transform: scale(.88) translateY(24px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+
+.sp-header {
+  background: var(--black); color: white;
+  padding: 32px 32px 28px; text-align: center;
+}
+.sp-header img { width: 52px; margin: 0 auto 14px; display: block; }
+.sp-header h1  { font-size: 22px; font-weight: 800; margin: 0 0 6px; }
+.sp-header p   { font-size: 14px; color: rgba(255,255,255,.6); margin: 0; }
+
+.sp-body { padding: 28px 28px 32px; }
+
+.sp-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+  margin-bottom: 14px; text-align: center; display: block;
+}
+
+.store-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.store-card {
+  border: 2px solid var(--border); border-radius: 14px;
+  padding: 22px 16px; text-align: center;
+  cursor: pointer; transition: all .2s;
+  background: white; font-family: var(--font); width: 100%;
+}
+.store-card:hover,
+.store-card:focus {
+  border-color: var(--black);
+  box-shadow: 0 4px 18px rgba(0,0,0,.12);
+  transform: translateY(-2px); outline: none;
+}
+.store-card .store-name {
+  font-size: 16px; font-weight: 800; color: var(--ink); margin-bottom: 4px;
+}
+.store-card .store-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+/* ── Store preview notice ────────────────────────────────── */
+.store-preview-notice {
+  text-align: center; padding: 32px 20px 0;
+}
+.store-preview-notice p { color: var(--muted); font-size: 14px; }
+.preview-switch-link {
+  color: var(--black); font-weight: 700; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.preview-switch-link:hover { color: #444; }
+
+@media (max-width: 420px) {
+  .sp-header { padding: 24px 20px 20px; }
+  .sp-body   { padding: 20px 16px 24px; }
+  .store-cards { grid-template-columns: 1fr; }
+}

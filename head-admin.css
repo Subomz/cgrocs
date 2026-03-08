@@ -420,3 +420,21 @@ body {
   max-width: 120px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ── SUBACCOUNT STATUS SECTION ────────────────────────────── */
+.subaccount-status-wrap {
+  padding: 12px 22px;
+  border-bottom: 1.5px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.subaccount-status-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin-bottom: 2px;
+}
+.subaccount-status-row {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+}
+.subaccount-store-name {
+  font-weight: 600; color: var(--ink); min-width: 80px; flex-shrink: 0;
+}
+.subaccount-status-value { color: var(--muted); }

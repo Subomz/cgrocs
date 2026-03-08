@@ -8,43 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="home.css">
-    <style>
-        .store-picker-overlay {
-            position:fixed;inset:0;background:rgba(10,10,10,0.82);
-            backdrop-filter:blur(6px);display:flex;align-items:center;
-            justify-content:center;z-index:99999;padding:20px;
-        }
-        .store-picker-box {
-            background:white;border-radius:20px;max-width:520px;width:100%;
-            box-shadow:0 24px 80px rgba(0,0,0,0.35);overflow:hidden;
-            animation:popIn .35s cubic-bezier(.34,1.56,.64,1) both;
-        }
-        @keyframes popIn {
-            from{opacity:0;transform:scale(.88) translateY(24px)}
-            to{opacity:1;transform:scale(1) translateY(0)}
-        }
-        .sp-header{background:#0a0a0a;color:white;padding:32px 32px 28px;text-align:center}
-        .sp-header img{width:52px;margin:0 auto 14px;display:block}
-        .sp-header h1{font-size:22px;font-weight:800;margin:0 0 6px}
-        .sp-header p{font-size:14px;color:rgba(255,255,255,.6);margin:0}
-        .sp-body{padding:28px 28px 32px}
-        .sp-label{font-size:11px;font-weight:700;text-transform:uppercase;
-            letter-spacing:.07em;color:#6b7280;margin-bottom:14px;text-align:center;display:block}
-        .store-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-        .store-card{border:2px solid #e4e4e7;border-radius:14px;padding:22px 16px;
-            text-align:center;cursor:pointer;transition:all .2s;background:white;
-            font-family:inherit;width:100%}
-        .store-card:hover,.store-card:focus{border-color:#0a0a0a;
-            box-shadow:0 4px 18px rgba(0,0,0,.12);transform:translateY(-2px);outline:none}
-        
-        .store-card .store-name{font-size:16px;font-weight:800;color:#111;margin-bottom:4px}
-        .store-card .store-desc{font-size:12px;color:#6b7280;line-height:1.4}
-        @media(max-width:420px){
-            .sp-header{padding:24px 20px 20px}
-            .sp-body{padding:20px 16px 24px}
-            .store-cards{grid-template-columns:1fr}
-        }
-    </style>
+
 </head>
 <body>
     <nav class="home-nav">
@@ -52,7 +16,7 @@
         <button onclick="showStorePicker()" class="login-button">Login</button>
     </nav>
 
-    <!-- Store Picker Modal -->
+    <!-- Store Picker Modal — cards populated dynamically from Firestore storeConfig -->
     <div class="store-picker-overlay" id="store-picker" style="display:none">
         <div class="store-picker-box">
             <div class="sp-header">
@@ -62,25 +26,18 @@
             </div>
             <div class="sp-body">
                 <span class="sp-label">Select your store</span>
-                <div class="store-cards">
-                    <button class="store-card" onclick="pickStore('store1')">
-                        <div class="store-name">Store 1</div>
-                        <div class="store-desc">ColEx Main Branch</div>
-                    </button>
-                    <button class="store-card" onclick="pickStore('store2')">
-                        <div class="store-name">Store 2</div>
-                        <div class="store-desc">ColEx Second Branch</div>
-                    </button>
+                <div class="store-cards" id="store-cards-container">
+                    <!-- Populated by loadStoreCards() below -->
+                    <p style="color:var(--muted);font-size:13px;text-align:center;grid-column:1/-1;">Loading stores…</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="store-preview-notice" style="display:none;text-align:center;padding:32px 20px 0">
-        <p style="color:#6b7280;font-size:14px">
+    <div id="store-preview-notice" class="store-preview-notice" style="display:none;">
+        <p>
             Browsing <strong id="preview-store-name">—</strong> &nbsp;&middot;&nbsp;
-            <a href="#" onclick="showStorePicker();return false"
-               style="color:#0a0a0a;font-weight:700;text-decoration:underline">Switch store</a>
+            <a href="#" onclick="showStorePicker();return false" class="preview-switch-link">Switch store</a>
         </p>
     </div>
     <div id="product-container-home" class="product-grid"></div>
@@ -89,51 +46,77 @@
     <script src="cardstorage.js" type="module"></script>
 
     <script type="module">
-        import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-        import { customerConfig } from "./firebase-config.js";
-        const APP_NAME = 'cardstorage';
-        let app;
-        try {
-            const ex = getApps().find(a => a.name === APP_NAME);
-            app = ex || initializeApp(customerConfig, APP_NAME);
-        } catch(e) { console.error('home auth check:', e); }
-        const auth = getAuth(app);
-        onAuthStateChanged(auth, user => { if (user) window.location.href = 'customer.html'; });
-    </script>
+        import { initializeApp, getApps }         from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged }     from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc }       from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+        import { customerConfig, headAdminConfig, STORE_IDS, STORE_LABELS } from "./firebase-config.js";
 
-    <script>
+        // Redirect logged-in customers straight to the shop
+        const custApp  = getApps().find(a => a.name === 'cardstorage') || initializeApp(customerConfig, 'cardstorage');
+        const custAuth = getAuth(custApp);
+        onAuthStateChanged(custAuth, user => { if (user) window.location.href = 'customer.html'; });
+
+        // Load store list from Firestore; fall back to firebase-config.js defaults
+        // NOTE: Firestore security rules must allow unauthenticated reads of storeConfig/list
+        async function loadStoreCards() {
+            let stores = STORE_IDS.map(id => ({ id, label: STORE_LABELS[id] || id }));
+            try {
+                const haApp = getApps().find(a => a.name === 'home-ha') || initializeApp(headAdminConfig, 'home-ha');
+                const haDb  = getFirestore(haApp);
+                const snap  = await getDoc(doc(haDb, 'storeConfig', 'list'));
+                if (snap.exists() && Array.isArray(snap.data().stores) && snap.data().stores.length > 0) {
+                    stores = snap.data().stores;
+                }
+            } catch(e) { /* rules may block unauthenticated reads — fallback is fine */ }
+
+            // Cache for label lookup
+            window._storeLabels = Object.fromEntries(stores.map(s => [s.id, s.label]));
+
+            const container = document.getElementById('store-cards-container');
+            if (!container) return;
+            container.innerHTML = stores.map(s => `
+                <button class="store-card" onclick="pickStore('${s.id}')">
+                    <div class="store-name">${s.label}</div>
+                </button>`).join('');
+        }
+
+        loadStoreCards();
+
         window.showStorePicker = function() {
             document.getElementById('store-picker').style.display = 'flex';
         };
+
         window.pickStore = function(storeId) {
             sessionStorage.setItem('selectedStore', storeId);
+            // Cache label so customer.html nav can display it without another Firestore call
+            if (window._storeLabels && window._storeLabels[storeId]) {
+                sessionStorage.setItem('storeLabel_' + storeId, window._storeLabels[storeId]);
+            }
             document.getElementById('store-picker').style.display = 'none';
-            const label = storeId === 'store1' ? 'Store 1 — Main Branch' : 'Store 2 — Second Branch';
+            const label = (window._storeLabels && window._storeLabels[storeId]) || storeId;
             const notice = document.getElementById('store-preview-notice');
             const nameEl = document.getElementById('preview-store-name');
             if (notice) notice.style.display = 'block';
-            if (nameEl)  nameEl.textContent   = label;
-            // Redirect to login so they can sign in for this store
+            if (nameEl) nameEl.textContent = label;
             window.location.href = 'login.html';
         };
-        document.addEventListener('DOMContentLoaded', function() {
+
+        document.addEventListener('DOMContentLoaded', async function() {
             const stored = sessionStorage.getItem('selectedStore');
             if (!stored) {
                 showStorePicker();
-                // No store yet — keep product grid empty
             } else {
-                const label = stored === 'store1' ? 'Store 1 — Main Branch' : 'Store 2 — Second Branch';
+                // Show preview notice with the cached or default label
+                await loadStoreCards(); // ensure _storeLabels is populated
+                const label = (window._storeLabels && window._storeLabels[stored]) || stored;
                 const notice = document.getElementById('store-preview-notice');
                 const nameEl = document.getElementById('preview-store-name');
                 if (notice) notice.style.display = 'block';
-                if (nameEl)  nameEl.textContent   = label;
-                // Store already chosen — load its products for the preview grid
-                if (typeof window.reloadStoreProducts === 'function') {
-                    window.reloadStoreProducts();
-                }
+                if (nameEl) nameEl.textContent = label;
+                if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
             }
         });
+
         document.getElementById('store-picker').addEventListener('click', function(e) {
             if (e.target === this && sessionStorage.getItem('selectedStore')) {
                 this.style.display = 'none';

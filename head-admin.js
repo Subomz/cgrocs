@@ -645,13 +645,25 @@ let _banksList = [];
 
 // Load saved subaccount settings into the status badges in the Accounts tab
 async function loadSubaccountSettingsUI() {
+  const section = document.getElementById('subaccount-status-section');
+
+  // Always rebuild the rows so they reflect the current dynamic store list
+  if (section) {
+    const rows = getStoreIds().map(storeId => `
+      <div class="subaccount-status-row">
+        <span class="subaccount-store-name">${getStoreLabel(storeId)}</span>
+        <span id="subaccount-status-${storeId}" class="subaccount-status-value">Not configured — click Store Bank Accounts</span>
+      </div>`).join('');
+    section.innerHTML = `<div class="subaccount-status-title">Payment Split Status</div>${rows}`;
+  }
+
   try {
     const snap = await getDoc(doc(headAdminDb, 'transferSettings', 'stores'));
     if (!snap.exists()) return;
     const data = snap.data();
     getStoreIds().forEach(storeId => {
-      const s   = data[storeId];
-      const el  = document.getElementById(`subaccount-status-${storeId}`);
+      const s  = data[storeId];
+      const el = document.getElementById(`subaccount-status-${storeId}`);
       if (el && s?.subaccount_code) {
         el.textContent = `✓ ${s.business_name} · ${s.account_number}`;
         el.style.color = '#16a34a';
@@ -1041,7 +1053,7 @@ window.openHeadAdminManagement = async function() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Full Name</label>
-            <input id="ha-new-name" type="text" placeholder="Jane Doe"
+            <input id="ha-new-name" type="text" placeholder="Jane Doe" autocomplete="off"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
@@ -1066,13 +1078,13 @@ window.openHeadAdminManagement = async function() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Email</label>
-            <input id="ha-new-email" type="email" placeholder="jane@colexstore.com"
+            <input id="ha-new-email" type="email" placeholder="jane@colexstore.com" autocomplete="off"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
           <div>
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Password</label>
-            <input id="ha-new-password" type="password" placeholder="At least 6 characters"
+            <input id="ha-new-password" type="password" placeholder="At least 6 characters" autocomplete="new-password"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
