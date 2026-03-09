@@ -4,7 +4,7 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import {
   getFirestore, collection, getDocs, doc, getDoc, setDoc
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-import { customerConfig, adminConfig, storeCol, storeDoc, STORE_LABELS } from "./firebase-config.js";
+import { customerConfig, adminConfig, headAdminConfig, storeCol, storeDoc, STORE_LABELS } from "./firebase-config.js";
 
 //  Firebase 
 const adminApp  = getApps().find(a => a.name === 'admin-guard')
@@ -16,6 +16,11 @@ const customerApp = getApps().find(a => a.name === 'cardstorage')
 const customerDb = getFirestore(customerApp);
 
 const adminDb = getFirestore(adminApp);
+
+// Head-admin project — used only to read storeConfig/list for live store names
+const headAdminApp = getApps().find(a => a.name === 'head-admin-guard')
+  || initializeApp(headAdminConfig, 'head-admin-guard');
+const headAdminDb = getFirestore(headAdminApp);
 
 const LOW_STOCK_THRESHOLD = 5;
 let cashierProfile = {};
@@ -68,7 +73,19 @@ async function loadCashierProfile(user) {
 
     const displayName = cashierProfile.name || user.email.split('@')[0];
     const initials    = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-    const storeLabel  = STORE_LABELS[_cashierStoreId] || _cashierStoreId;
+
+    // Fetch live store label from Firestore storeConfig/list so renamed stores
+    // display their current name instead of the hardcoded firebase-config.js fallback.
+    let storeLabel = STORE_LABELS[_cashierStoreId] || _cashierStoreId;
+    try {
+        const cfgSnap = await getDoc(doc(headAdminDb, 'storeConfig', 'list'));
+        if (cfgSnap.exists() && Array.isArray(cfgSnap.data().stores)) {
+            const found = cfgSnap.data().stores.find(s => s.id === _cashierStoreId);
+            if (found && found.label) storeLabel = found.label;
+        }
+    } catch (e) {
+        console.warn('Could not load live store label, using default:', e.message);
+    }
 
     const navAvatar = document.getElementById('cashier-avatar');
     const navName   = document.getElementById('cashier-name');
