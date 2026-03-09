@@ -643,10 +643,14 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 @media screen and (max-width: 768px) {
   .tabs-header   { display: none; }
   .tabs-menu-btn { display: flex; }
-  .nav-cashier-name { display: none; }
-  /* Hide store badge inline — it appears in the drawer header instead */
-  #nav-store-label  { display: none !important; }
+  /* Hide the entire cashier info block (avatar + name + store badge).
+     Only the hamburger + logo + logout remain visible in the mobile nav.
+     Store and cashier info are shown inside the drawer instead. */
+  .nav-cashier   { display: none; }
+  #nav-store-label { display: none !important; }
   .admin-nav { padding: 0 14px; }
+  /* Tighten the right side so hamburger + logout don't crowd */
+  .nav-right { gap: 8px; }
   .nav-left  { align-items: center; }
 
   .verification-container { grid-template-columns: 1fr; gap: 20px; }

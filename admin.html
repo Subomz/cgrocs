@@ -46,7 +46,11 @@
     <div class="tabs-overlay" id="tabs-overlay" onclick="window.closeTabsMenu()"></div>
     <div class="tabs-drawer" id="tabs-drawer">
         <div class="tabs-drawer-header">
-            <span>Menu <span id="drawer-store-label" style="font-weight:400;opacity:.55;font-size:11px;margin-left:4px;"></span></span>
+            <!-- Cashier name + store shown here on mobile since nav-cashier is hidden -->
+            <div style="display:flex;flex-direction:column;gap:2px;">
+                <span id="drawer-cashier-name" style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);text-transform:none;letter-spacing:0;"></span>
+                <span id="drawer-store-label" style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.45);text-transform:none;letter-spacing:0;"></span>
+            </div>
             <button onclick="window.closeTabsMenu()" class="tabs-drawer-close">&#215;</button>
         </div>
         <button class="drawer-tab-btn active" onclick="switchTab('dashboard');window.closeTabsMenu()">Dashboard</button>
@@ -223,10 +227,13 @@
         window.toggleTabsMenu = function() {
             document.getElementById('tabs-drawer').classList.toggle('open');
             document.getElementById('tabs-overlay').classList.toggle('open');
-            // Keep drawer store label in sync with nav store label
-            const navLabel = document.getElementById('nav-store-label');
-            const drawerLabel = document.getElementById('drawer-store-label');
-            if (navLabel && drawerLabel) drawerLabel.textContent = navLabel.textContent;
+            // Mirror cashier name + store label into drawer header on open
+            const navName  = document.getElementById('cashier-name');
+            const navStore = document.getElementById('nav-store-label');
+            const drName   = document.getElementById('drawer-cashier-name');
+            const drStore  = document.getElementById('drawer-store-label');
+            if (navName  && drName)  drName.textContent  = navName.textContent;
+            if (navStore && drStore) drStore.textContent = navStore.textContent;
         };
         window.closeTabsMenu = function() {
             document.getElementById('tabs-drawer').classList.remove('open');
