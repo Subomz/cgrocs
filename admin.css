@@ -640,7 +640,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 
 @media (max-width: 900px) { .dash-stats { grid-template-columns: repeat(3, 1fr); } }
 
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 860px) {
   .tabs-header   { display: none; }
   .tabs-menu-btn { display: flex; }
   /* Hide the entire cashier info block (avatar + name + store badge).

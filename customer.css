@@ -470,6 +470,18 @@ button:disabled {
 .btn-reshow-qr:hover { background: var(--ink); color: white; }
 
 /* ── RESPONSIVE ───────────────────────────────────────────── */
+/* Tablet / iPad: 601px – 860px — nav stays one row but search shrinks,
+   store label hidden to prevent crowding */
+@media (min-width: 601px) and (max-width: 860px) {
+  .customer-nav { padding: 0 16px; gap: 10px; }
+  #customer-store-label { display: none; }
+  #nav-search-wrap { margin: 0 8px; max-width: 220px; }
+  .orders-btn-label { display: none; }
+  .cart-trigger  { padding: 7px 12px; font-size: 13px; }
+  .orders-btn    { padding: 7px 10px; font-size: 13px; }
+  .logout-button { padding: 7px 12px; font-size: 13px; }
+}
+
 @media (max-width: 600px) {
   .customer-nav {
     flex-wrap: wrap; padding: 8px 12px !important;
@@ -477,7 +489,6 @@ button:disabled {
   }
   .customer-nav .navlogo { flex-shrink: 0; }
   .customer-nav .account { flex-shrink: 0; margin-left: auto; gap: 6px; }
-  /* Store label beside logo is replaced by the search placeholder context on mobile */
   #customer-store-label { display: none; }
   #nav-search-wrap {
     order: 3; max-width: 100%; width: 100%; margin: 0; flex-basis: 100%;
@@ -487,13 +498,12 @@ button:disabled {
   .qr-modal-content { width: 95%; }
   .qr-body { padding: 20px; }
   .orders-btn-label { display: none; }
-  /* Tighten nav action buttons */
   .cart-trigger  { padding: 6px 10px; font-size: 13px; }
   .orders-btn    { padding: 6px 10px; font-size: 13px; }
   .logout-button { padding: 6px 10px; font-size: 13px; }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .filter-toggle-btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 16px; border-radius: 20px;

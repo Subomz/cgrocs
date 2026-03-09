@@ -367,18 +367,14 @@ body {
   .stat-strip { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* At 820px the tabs start to crowd — reduce tab padding */
-@media (max-width: 820px) {
-  .nav-tab { padding: 8px 12px; font-size: 13px; }
-  #ha-role-badge { display: none !important; }
-}
-
-@media (max-width: 700px) {
+/* At 860px the four tabs + right-side elements start crowding — switch to hamburger */
+@media (max-width: 860px) {
   .nav            { padding: 0 16px; }
   .nav-tabs       { display: none; }
   .nav-hamburger  { display: block; }
   .nav-name       { display: none; }
-  .nav-brand-label { display: none; }  /* hide "Head Admin" text — saves space */
+  .nav-brand-label { display: none; }
+  #ha-role-badge  { display: none !important; }
 
   .list-header, .list-row { font-size: 12px; }
   .lh-purchases, .lr-purchases { grid-template-columns: 1fr 1.5fr 1fr 1fr; }
