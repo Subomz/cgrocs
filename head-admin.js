@@ -669,7 +669,7 @@ window.loadSubaccountSettingsUI = async function loadSubaccountSettingsUI() {
       const s  = data[storeId];
       const el = document.getElementById(`subaccount-status-${storeId}`);
       if (el && s?.subaccount_code) {
-        el.textContent = `✓ ${s.business_name} · ${s.account_number}`;
+        el.textContent = `${s.business_name} · ${s.account_number}`;
         el.style.color = '#16a34a';
       }
     });
@@ -780,7 +780,7 @@ window.openStoreBankSettings = async function() {
         if (acctEl) acctEl.value = s.account_number  || '';
         if (nameEl) nameEl.value = s.business_name   || '';
         if (stEl && s.subaccount_code) {
-          stEl.textContent = `✓ Subaccount active: ${s.business_name} (${s.account_number})`;
+          stEl.textContent = `Subaccount active: ${s.business_name} (${s.account_number})`;
           stEl.style.color = '#16a34a';
         }
       });
@@ -846,13 +846,13 @@ window.verifyAndSaveStoreSubaccount = async function(storeId) {
     );
 
     if (stEl) {
-      stEl.textContent = `✓ Subaccount active: ${res.business_name} (${account_number})`;
+      stEl.textContent = `Subaccount active: ${res.business_name} (${account_number})`;
       stEl.style.color = '#16a34a';
     }
 
     // Update the badge in the Accounts tab
     const badge = document.getElementById(`subaccount-status-${storeId}`);
-    if (badge) { badge.textContent = `✓ ${res.business_name} · ${account_number}`; badge.style.color = '#16a34a'; }
+    if (badge) { badge.textContent = `${res.business_name} · ${account_number}`; badge.style.color = '#16a34a'; }
 
     notify.success(`${getStoreLabel(storeId)} bank account saved! Payments will now split automatically.`);
 
@@ -930,7 +930,7 @@ function _renderStoreMgmtList() {
       </button>
       <button onclick="window._deleteStore('${id}')"
         style="padding:5px 10px;background:#fff5f5;border:1.5px solid #fee2e2;border-radius:6px;font-size:12px;cursor:pointer;color:#dc2626;">
-        ✕
+        &#215;
       </button>
     </div>`).join('');
 }
@@ -1186,7 +1186,7 @@ window._loadHeadAdminList = async function() {
         </button>
         <button onclick="window._deleteHeadAdmin('${safeUid}','${safeName}')"
           style="padding:5px 10px;background:#fff5f5;border:1.5px solid #fee2e2;border-radius:6px;font-size:12px;cursor:pointer;color:#dc2626;flex-shrink:0;">
-          ✕
+          &#215;
         </button>
       </div>`;
     }).join('');

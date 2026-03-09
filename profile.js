@@ -78,8 +78,8 @@ async function loadProfile(uid) {
             `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=111&color=fff&size=120`;
     }
 
-    setTextContent('badge-phone',   p.phone   ? `📞 ${p.phone}`   : 'No phone set');
-    setTextContent('badge-address', p.address ? `📍 ${p.address}` : 'No address set');
+    setTextContent('badge-phone',   p.phone   ? p.phone : 'No phone set');
+    setTextContent('badge-address', p.address ? p.address : 'No address set');
 }
 
 //  Avatar file input 
@@ -176,8 +176,8 @@ window.saveProfile = async function() {
 
         // Refresh sidebar
         setTextContent('sidebar-name',  updated.fullName);
-        setTextContent('badge-phone',   updated.phone   ? `📞 ${updated.phone}`   : 'No phone set');
-        setTextContent('badge-address', updated.address ? `📍 ${updated.address}` : 'No address set');
+        setTextContent('badge-phone',   updated.phone   ? updated.phone : 'No phone set');
+        setTextContent('badge-address', updated.address ? updated.address : 'No address set');
 
         // Keep avatar display in sync
         const avatarEl = document.getElementById('avatar-display');
@@ -280,7 +280,7 @@ function _renderPurchaseList() {
 
         // Fulfillment info — escape before injecting
         const method      = p.fulfillmentMethod || 'unknown';
-        const methodLabel = method === 'pickup' ? '🏪 Store Pickup' : method === 'delivery' ? '🚚 Delivery' : '—';
+        const methodLabel = method === 'pickup' ? 'Store Pickup' : method === 'delivery' ? 'Delivery' : '—';
         const addrText    = p.deliveryAddress && p.deliveryAddress !== 'Store pickup'
             ? escapeHtml(p.deliveryAddress) : '';
 
