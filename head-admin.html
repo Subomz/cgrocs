@@ -209,9 +209,10 @@
           </div>
           <div class="field">
             <label>Assigned Store</label>
+            <!-- Options are populated dynamically by refreshStoreDropdowns() in head-admin.js
+                 from Firestore storeConfig/list — never hardcoded here. -->
             <select id="new-store">
-              <option value="store1">Store 1 — Main Branch</option>
-              <option value="store2">Store 2 — Second Branch</option>
+              <option value="" disabled>Loading stores…</option>
             </select>
           </div>
           <div class="field">

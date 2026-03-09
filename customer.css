@@ -476,7 +476,9 @@ button:disabled {
     height: auto; gap: 8px;
   }
   .customer-nav .navlogo { flex-shrink: 0; }
-  .customer-nav .account { flex-shrink: 0; margin-left: auto; }
+  .customer-nav .account { flex-shrink: 0; margin-left: auto; gap: 6px; }
+  /* Store label beside logo is replaced by the search placeholder context on mobile */
+  #customer-store-label { display: none; }
   #nav-search-wrap {
     order: 3; max-width: 100%; width: 100%; margin: 0; flex-basis: 100%;
   }
@@ -485,6 +487,10 @@ button:disabled {
   .qr-modal-content { width: 95%; }
   .qr-body { padding: 20px; }
   .orders-btn-label { display: none; }
+  /* Tighten nav action buttons */
+  .cart-trigger  { padding: 6px 10px; font-size: 13px; }
+  .orders-btn    { padding: 6px 10px; font-size: 13px; }
+  .logout-button { padding: 6px 10px; font-size: 13px; }
 }
 
 @media (max-width: 768px) {

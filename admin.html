@@ -46,7 +46,7 @@
     <div class="tabs-overlay" id="tabs-overlay" onclick="window.closeTabsMenu()"></div>
     <div class="tabs-drawer" id="tabs-drawer">
         <div class="tabs-drawer-header">
-            <span>Menu</span>
+            <span>Menu <span id="drawer-store-label" style="font-weight:400;opacity:.55;font-size:11px;margin-left:4px;"></span></span>
             <button onclick="window.closeTabsMenu()" class="tabs-drawer-close">&#215;</button>
         </div>
         <button class="drawer-tab-btn active" onclick="switchTab('dashboard');window.closeTabsMenu()">Dashboard</button>
@@ -223,6 +223,10 @@
         window.toggleTabsMenu = function() {
             document.getElementById('tabs-drawer').classList.toggle('open');
             document.getElementById('tabs-overlay').classList.toggle('open');
+            // Keep drawer store label in sync with nav store label
+            const navLabel = document.getElementById('nav-store-label');
+            const drawerLabel = document.getElementById('drawer-store-label');
+            if (navLabel && drawerLabel) drawerLabel.textContent = navLabel.textContent;
         };
         window.closeTabsMenu = function() {
             document.getElementById('tabs-drawer').classList.remove('open');
