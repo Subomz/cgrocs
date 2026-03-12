@@ -108,6 +108,22 @@ h1.page-title {
 .login-link a { color: var(--black); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .login-link a:hover { color: #444; }
 
+/* ── Password field with show/hide toggle ── */
+.password-input-wrap {
+  position: relative;
+}
+.password-input-wrap input {
+  padding-right: 58px; /* make room for the Show button */
+}
+.show-password-btn {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; padding: 2px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); cursor: pointer;
+  transition: color 0.2s; line-height: 0;
+}
+.show-password-btn:hover { color: var(--black); }
+
 /* ── Responsive ── */
 @media (max-width: 480px) {
   body { padding: 24px 12px 32px; align-items: flex-start; }
