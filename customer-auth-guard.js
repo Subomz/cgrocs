@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import { customerConfig } from "./firebase-config.js"; // fix #10
 
 const APP_NAME = 'cardstorage';
@@ -37,6 +37,16 @@ onAuthStateChanged(auth, (user) => {
         sessionStorage.removeItem('selectedStore');
         window.location.href = 'home.html';
     } else {
+        // If no tab_active flag, the tab was closed without logging out.
+        // Sign out now so Firebase's persisted auth doesn't keep them in.
+        if (!sessionStorage.getItem('tab_active')) {
+            signOut(auth).then(() => {
+                sessionStorage.clear();
+                window.location.href = 'home.html';
+            });
+            return;
+        }
+
         console.log("User authenticated:", user.email);
         window.currentUser = user;
 

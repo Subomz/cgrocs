@@ -28,6 +28,15 @@ onAuthStateChanged(auth, async (user) => {
             window.location.href = 'login.html';
         }
     } else {
+        // If no tab_active flag, the tab was closed without logging out — sign out now.
+        if (!sessionStorage.getItem('tab_active')) {
+            signOut(auth).then(() => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            });
+            return;
+        }
+
         window.currentAdmin = user;
 
         // Load cashier's assigned store so all modules can use it

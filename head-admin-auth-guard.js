@@ -26,6 +26,15 @@ onAuthStateChanged(auth, async (user) => {
         sessionStorage.removeItem('ha_intentional_logout');
         window.location.href = 'login.html';
     } else {
+        // If no tab_active flag, the tab was closed without logging out — sign out now.
+        if (!sessionStorage.getItem('tab_active')) {
+            signOut(auth).then(() => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            });
+            return;
+        }
+
         window.currentHeadAdmin = user;
 
         // Load admin role (general | store-head) and storeId

@@ -65,6 +65,7 @@ document.getElementById("submit").addEventListener("click", async function(e) {
         if (!selectedStore) {
             sessionStorage.setItem('selectedStore', 'store1');
         }
+        sessionStorage.setItem('tab_active', 'true');
         setTimeout(() => { window.location.href = "customer.html"; }, 500);
         return;
     } catch (customerErr) {
@@ -100,6 +101,7 @@ document.getElementById("submit").addEventListener("click", async function(e) {
 
         console.log("Admin login successful:", cred.user.email);
         notify.success("Login successful!");
+        sessionStorage.setItem('tab_active', 'true');
         setTimeout(() => { window.location.href = "admin.html"; }, 500);
         return;
     } catch (adminErr) {
@@ -134,6 +136,7 @@ document.getElementById("submit").addEventListener("click", async function(e) {
 
         console.log("Head admin login successful:", cred.user.email);
         notify.success("Login successful!");
+        sessionStorage.setItem('tab_active', 'true');
         setTimeout(() => { window.location.href = "head-admin.html"; }, 500);
         return;
     } catch (headAdminErr) {
