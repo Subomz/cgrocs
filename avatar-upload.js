@@ -1,5 +1,5 @@
 // ============================================================
-//  ColEx — avatar-upload.js
+//  CloEx — avatar-upload.js
 //  Shared avatar resize + upload logic used by both
 //  register.html and setup-profile.html.
 //  Include with a plain <script src="avatar-upload.js"></script>

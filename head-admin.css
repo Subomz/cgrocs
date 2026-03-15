@@ -1,5 +1,5 @@
 /* ============================================================
-   ColEx — head-admin.css
+   CloEx — head-admin.css
    Matches admin.css aesthetic: black/white, clean, utilitarian
    ============================================================ */
 
@@ -157,6 +157,8 @@ body {
   display: grid; grid-template-columns: repeat(4, 1fr);
   gap: 14px; margin-bottom: 28px;
 }
+/* General admin sees 5 stat cards (goods revenue + service charge split) */
+.stat-strip.general-admin { grid-template-columns: repeat(5, 1fr); }
 .stat-card {
   background: white; border-radius: 14px;
   border: 1.5px solid var(--border);

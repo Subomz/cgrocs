@@ -207,7 +207,7 @@ window.printReceipt = async function(purchaseId) {
     td{padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:14px}
     .footer{text-align:center;margin-top:36px;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px}
     </style></head><body>
-    <div class="rh"><h1>ColEx</h1><h2>Purchase Receipt</h2></div>
+    <div class="rh"><h1>CloEx</h1><h2>Purchase Receipt</h2></div>
     <div class="sec"><div class="sec-t">Customer</div>
       <div class="dr"><span>Name</span><span>${escapeHtml(customerName)}</span></div>
       <div class="dr"><span>Phone</span><span>${escapeHtml(customerPhone)}</span></div>
@@ -227,7 +227,7 @@ window.printReceipt = async function(purchaseId) {
         <td style="padding:12px 10px">₦${Number(purchase.total).toFixed(2)}</td>
       </tr></table>
     </div>
-    <div class="footer"><p>Thank you for shopping with ColEx!</p><p style="margin-top:4px">${new Date().toLocaleString()}</p></div>
+    <div class="footer"><p>Thank you for shopping with CloEx!</p><p style="margin-top:4px">${new Date().toLocaleString()}</p></div>
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
   printWindow.document.close();
 };

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ColEx — Head Admin</title>
+  <title>CloEx — Head Admin</title>
   <link rel="icon" type="image/x-icon" href="images/CloEx.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -29,7 +29,7 @@
   <!-- NAV -->
   <nav class="nav">
     <div class="nav-brand">
-      <img src="images/CloEx.png" alt="ColEx">
+      <img src="images/CloEx.png" alt="CloEx">
       <span class="nav-brand-label">Head Admin</span>
     </div>
 
@@ -86,8 +86,13 @@
           <div class="stat-value amber" id="s-pending">&#8212;</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Revenue</div>
+          <div class="stat-label">Goods Revenue</div>
           <div class="stat-value" id="s-revenue">&#8212;</div>
+        </div>
+        <!-- Service charge card — shown for general admin only, hidden for store-head -->
+        <div class="stat-card" id="s-charge-card" style="display:none;">
+          <div class="stat-label">Service Charge</div>
+          <div class="stat-value" id="s-charge-revenue">&#8212;</div>
         </div>
       </div>
 
@@ -240,7 +245,7 @@
           </div>
           <div class="field">
             <label>Email Address</label>
-            <input type="email" id="new-email" placeholder="jane@colexstore.com">
+            <input type="email" id="new-email" placeholder="jane@cloexstore.com">
           </div>
           <div class="field">
             <label>Password</label>

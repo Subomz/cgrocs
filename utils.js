@@ -1,5 +1,5 @@
 // ============================================================
-//  ColEx — utils.js
+//  CloEx — utils.js
 //  Shared utility functions. Import wherever needed instead
 //  of copy-pasting.
 // ============================================================

@@ -114,9 +114,14 @@ onAuthStateChanged(adminAuth, async (user) => {
     if (re) re.textContent = _currentRole === 'general' ? 'General Admin' : `Head Admin · ${getStoreLabel(_adminStores[0])}`;
   } catch (e) { /* non-fatal */ }
 
-  // Show general-admin-only buttons
+  // Show general-admin-only buttons and the service charge revenue card
   if (_currentRole === 'general') {
     document.querySelectorAll('.general-admin-only').forEach(el => el.style.display = '');
+    // Expand stat strip to 5 columns and reveal the service charge card
+    const strip = document.querySelector('.stat-strip');
+    if (strip) strip.classList.add('general-admin');
+    const chargeCard = document.getElementById('s-charge-card');
+    if (chargeCard) chargeCard.style.display = '';
   }
 
   injectStoreTabs();
@@ -212,11 +217,27 @@ function updateStats() {
   const total    = all.length;
   const verified = all.filter(p => p.verified).length;
   const pending  = total - verified;
-  const revenue  = all.filter(p => p.verified).reduce((s, p) => s + (p.total || 0), 0);
+
+  // Split revenue into goods value and service charge.
+  // cartSubtotal is the goods-only value saved since the revenue-split update.
+  // For older purchases that predate the field, fall back to total - serviceCharge,
+  // and if serviceCharge is also missing, treat the entire total as goods revenue.
+  const verifiedPurchases = all.filter(p => p.verified);
+  const goodsRevenue  = verifiedPurchases.reduce((s, p) => {
+    const sc = p.serviceCharge || 0;
+    return s + (p.cartSubtotal != null ? p.cartSubtotal : (p.total || 0) - sc);
+  }, 0);
+  const chargeRevenue = verifiedPurchases.reduce((s, p) => s + (p.serviceCharge || 0), 0);
+
   setText('s-total',    total);
   setText('s-verified', verified);
   setText('s-pending',  pending);
-  setText('s-revenue',  '₦' + revenue.toLocaleString('en-NG', { minimumFractionDigits: 2 }));
+  // Store-head sees goods revenue only; general admin sees both (charge card shown in auth callback)
+  setText('s-revenue', '₦' + goodsRevenue.toLocaleString('en-NG', { minimumFractionDigits: 2 }));
+  if (_currentRole === 'general') {
+    setText('s-charge-revenue', '₦' + chargeRevenue.toLocaleString('en-NG', { minimumFractionDigits: 2 }));
+  }
+
   const sub = document.getElementById('purch-subtitle');
   if (sub) sub.textContent = `${total} purchase${total !== 1 ? 's' : ''} · live updates on`;
 }
@@ -547,7 +568,7 @@ window.reprintReceipt = function(purchaseId, storeId) {
     td{padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:14px}
     .footer{text-align:center;margin-top:36px;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px}
     </style></head><body>
-    <div class="rh"><h1>ColEx</h1><h2>Purchase Receipt${storeInfo ? ` · ${storeInfo}` : ''}</h2>
+    <div class="rh"><h1>CloEx</h1><h2>Purchase Receipt${storeInfo ? ` · ${storeInfo}` : ''}</h2>
     ${purchase.verified?'<div class="badge v-badge"> VERIFIED</div>':'<div class="badge p-badge"> PENDING</div>'}
     </div>
     <div class="sec"><div class="sec-t">Customer</div>
@@ -568,7 +589,7 @@ window.reprintReceipt = function(purchaseId, storeId) {
         <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
         <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
       </tr></table></div>
-    <div class="footer"><p>Thank you for shopping with ColEx!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
+    <div class="footer"><p>Thank you for shopping with CloEx!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
   printWindow.document.close();
 };
@@ -747,7 +768,7 @@ window.openStoreBankSettings = async function() {
 
           <div style="margin-bottom:12px;">
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Business / Account Name</label>
-            <input type="text" id="sbs-biz-${storeId}" placeholder="e.g. ColEx Store One"
+            <input type="text" id="sbs-biz-${storeId}" placeholder="e.g. CloEx Store One"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
@@ -1154,7 +1175,7 @@ window.openHeadAdminManagement = async function() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Email</label>
-            <input id="ha-new-email" type="email" placeholder="jane@colexstore.com" autocomplete="off"
+            <input id="ha-new-email" type="email" placeholder="jane@cloexstore.com" autocomplete="off"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>

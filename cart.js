@@ -443,7 +443,7 @@ window.downloadReceiptPDF = function(purchaseId) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ColEx Receipt — ${purchaseId}</title>
+  <title>CloEx Receipt — ${purchaseId}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -555,7 +555,7 @@ window.downloadReceiptPDF = function(purchaseId) {
   <!-- Header -->
   <div class="header">
     <div>
-      <div class="brand-name">ColEx</div>
+      <div class="brand-name">CloEx</div>
       <div class="brand-store">${storeLabel}</div>
     </div>
     <div class="receipt-label">
@@ -597,7 +597,7 @@ window.downloadReceiptPDF = function(purchaseId) {
 
   <!-- Footer -->
   <div class="footer">
-    Thank you for shopping at ColEx · ${storeLabel}<br>
+    Thank you for shopping at CloEx · ${storeLabel}<br>
     Keep this receipt until your order is collected
   </div>
 
@@ -681,7 +681,9 @@ window._paystackCallback = function(response) {
       quantity: item.quantity,
       price:    item.price
     })),
-    total:     total,
+    total:        total,           // grand total (goods + service charge)
+    cartSubtotal: cartSubtotal,    // goods value only
+    serviceCharge: serviceCharge,  // service charge — used by head-admin revenue split
     date:      new Date().toISOString(),
     reference: response.reference,
     verified:  false,

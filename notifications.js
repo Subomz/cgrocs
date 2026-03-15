@@ -1,4 +1,4 @@
-// Unified Notification System for ColEx
+// Unified Notification System for CloEx
 // This provides sleek, modern notifications instead of browser alerts
 
 class NotificationSystem {
