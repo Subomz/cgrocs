@@ -1,6 +1,7 @@
 import { getFirestore, collection, addDoc, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { getApps, initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getActiveStore, storeCol, storeDoc, headAdminConfig } from "./firebase-config.js";
+import { escapeHtml } from "./utils.js";
 
 // Customer Firestore (purchases, reservations, products)
 const app = getApps().find(a => a.name === 'cardstorage') || getApps()[0];
@@ -420,7 +421,7 @@ window.downloadReceiptPDF = function(purchaseId) {
     const subtotal = price * item.quantity;
     return `
       <tr>
-        <td>${item.name}</td>
+        <td>${escapeHtml(item.name)}</td>
         <td style="text-align:center;">${item.quantity}</td>
         <td style="text-align:right;">₦${price.toFixed(2)}</td>
         <td style="text-align:right;">₦${subtotal.toFixed(2)}</td>
@@ -924,7 +925,7 @@ function updateCartDisplay() {
         return `
         <div class="cart-item">
           <div class="cart-item-info" style="flex:1;">
-            <strong>${item.name}</strong>
+            <strong>${escapeHtml(item.name)}</strong>
             <div class="cart-item-qty">
               <button class="cart-qty-btn" onclick="changeCartQty(${index}, -1)">−</button>
               <span class="cart-qty-num">${item.quantity}</span>

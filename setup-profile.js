@@ -98,27 +98,11 @@ document.getElementById('submit').addEventListener('click', async function() {
 
         if (e.code === 'permission-denied') {
             console.error(
-                "FIRESTORE RULES FIX REQUIRED\n\n" +
-                "Go to: Firebase Console > Firestore Database > Rules\n" +
-                "Replace your rules with:\n\n" +
-                "rules_version = '2';\n" +
-                "service cloud.firestore {\n" +
-                "  match /databases/{database}/documents {\n\n" +
-                "    match /users/{userId} {\n" +
-                "      allow read, write: if request.auth != null && request.auth.uid == userId;\n" +
-                "    }\n\n" +
-                "    match /products/{productId} {\n" +
-                "      allow read: if true;\n" +
-                "      allow write: if request.auth != null;\n" +
-                "    }\n\n" +
-                "    match /purchases/{purchaseId} {\n" +
-                "      allow read, write: if request.auth != null;\n" +
-                "    }\n" +
-                "  }\n" +
-                "}"
+                "FIRESTORE PERMISSION DENIED — check your Firestore security rules.\n" +
+                "Ensure the /users/{userId} path allows read/write for authenticated users."
             );
             notify.error(
-                "Permission denied by database. Check the browser console (F12) for the exact Firestore rules you need to add.",
+                "Permission denied. Please contact support or check your Firestore rules.",
                 10000
             );
         } else if (e.code === 'unavailable' || e.code === 'network-request-failed') {

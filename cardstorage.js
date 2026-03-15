@@ -78,12 +78,18 @@ async function loadProducts() {
     const snap = await getDocs(col('products'));
     const loaded = [];
     snap.forEach(d => loaded.push({ id: d.id, ...d.data() }));
-    if (loaded.length === 0) { await initializeDefaultProducts(); return loadProducts(); }
+    if (loaded.length === 0 && !snap.metadata.fromCache) {
+      // Only seed when Firestore confirms the collection is genuinely empty.
+      // If the read came from cache (e.g. a permissions error returned nothing),
+      // we skip seeding to avoid silently overwriting a store's products.
+      await initializeDefaultProducts();
+      return loadProducts();
+    }
     return loaded;
   } catch (e) {
     console.error('Firestore error:', e);
     notify.error('Database error. Using local cache.');
-    const local = localStorage.getItem(`myProducts_${resolveStoreId()}`);
+    const local = sessionStorage.getItem(`myProducts_${resolveStoreId()}`);
     return local ? JSON.parse(local) : [...DEFAULT_PRODUCTS];
   }
 }
@@ -408,7 +414,7 @@ window.saveProduct = async function() {
       notify.success("Product updated!");
     }
     products = await loadProducts(); window.products = products;
-    localStorage.setItem(`myProducts_${resolveStoreId()}`, JSON.stringify(products));
+    sessionStorage.setItem(`myProducts_${resolveStoreId()}`, JSON.stringify(products));
     renderAll(); clearInputs();
     document.getElementById('save-btn').innerText = "Save Product";
     await populateCategoryDropdown('');
@@ -424,7 +430,7 @@ window.deleteProduct = function(index) {
       await deleteProductFromFirestore(deletedProduct.id);
       await logProductChange('delete', deletedProduct.id, deletedProduct, deletedProduct, null, cashierEmail, cashierName);
       products = await loadProducts(); window.products = products;
-      localStorage.setItem(`myProducts_${resolveStoreId()}`, JSON.stringify(products));
+      sessionStorage.setItem(`myProducts_${resolveStoreId()}`, JSON.stringify(products));
       renderAll(); notify.success("Deleted!");
     } catch (e) { notify.error("Error deleting."); console.error(e); }
   });

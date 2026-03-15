@@ -1,5 +1,5 @@
 // admin-verification.js — QR verification + pending purchases tab (store-aware)
-import { getFirestore, collection, getDocs, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, onSnapshot, doc, updateDoc, query, where, limit } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { storeCol, storeDoc } from "./firebase-config.js";
 
@@ -90,13 +90,17 @@ async function verifyPurchase(purchaseId) {
     <style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>`;
 
   try {
-    const querySnapshot = await getDocs(col('purchases'));
+    // Use a targeted query instead of scanning the entire collection —
+    // this costs 1 Firestore read regardless of collection size.
+    const q = query(col('purchases'), where('id', '==', purchaseId), limit(1));
+    const querySnapshot = await getDocs(q);
     let purchase = null, purchaseDocId = null;
 
-    querySnapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      if (data.id === purchaseId) { purchase = data; purchaseDocId = docSnap.id; }
-    });
+    if (!querySnapshot.empty) {
+      const docSnap = querySnapshot.docs[0];
+      purchase = docSnap.data();
+      purchaseDocId = docSnap.id;
+    }
 
     if (!purchase) {
       resultDiv.className = 'verification-result error';
@@ -308,8 +312,8 @@ function renderPendingList() {
 
   listEl.innerHTML = filtered.map(p => {
     const date         = p.date ? new Date(p.date).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-    const itemsText    = p.items ? p.items.map(i => `<span class="pend-item-pill">${i.quantity}× ${i.name}</span>`).join('') : '—';
-    const customerName = p.customerName || p.email || 'Unknown customer';
+    const itemsText    = p.items ? p.items.map(i => `<span class="pend-item-pill">${escapeHtml(String(i.quantity))}× ${escapeHtml(i.name)}</span>`).join('') : '—';
+    const customerName = escapeHtml(p.customerName || p.email || 'Unknown customer');
     return `
     <div class="pending-card" id="pcard-${p._docId}">
       <div class="pend-top">

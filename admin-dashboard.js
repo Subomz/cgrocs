@@ -2,7 +2,7 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import {
-  getFirestore, collection, getDocs, doc, getDoc, setDoc
+  getFirestore, collection, getDocs, doc, getDoc, setDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { customerConfig, adminConfig, headAdminConfig, storeCol, storeDoc, STORE_LABELS } from "./firebase-config.js";
 
@@ -26,6 +26,10 @@ const LOW_STOCK_THRESHOLD = 5;
 let cashierProfile = {};
 let currentAdminUser = null;
 let _cashierStoreId = 'store1'; // set after loading cashier profile
+
+// Live purchases cache — kept up to date by the onSnapshot listener
+let _dashPurchases = [];
+let _dashPurchasesUnsub = null; // unsubscribe handle so we can restart if storeId changes
 
 // Store-aware Firestore helpers
 function custCol(name) { return collection(customerDb, storeCol(_cashierStoreId, name)); }
@@ -107,100 +111,125 @@ async function loadCashierProfile(user) {
 }
 
 //  Dashboard data 
-window.loadDashboard = async function() {
-    try {
-        const [purchasesSnap, productsSnap] = await Promise.all([
-            getDocs(custCol('purchases')),
-            getDocs(custCol('products'))
-        ]);
 
-        const purchases = [];
-        purchasesSnap.forEach(d => purchases.push(d.data()));
+// Separated render function so it can be called both from the onSnapshot
+// callback and on-demand (e.g. when the cashier switches back to this tab).
+function _renderDashboard(purchases, products) {
+    const todayStr      = new Date().toDateString();
+    const todayOrders   = purchases.filter(p => p.date && new Date(p.date).toDateString() === todayStr);
+    const pendingOrders = purchases.filter(p => !p.verified);
+    const lowStockItems = products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock >= 0);
 
-        const products = [];
-        productsSnap.forEach(d => products.push({ id: d.id, ...d.data() }));
+    setText('stat-today',    todayOrders.length);
+    setText('stat-pending',  pendingOrders.length);
+    setText('stat-lowstock', lowStockItems.length);
 
-        const todayStr      = new Date().toDateString();
-        const todayOrders   = purchases.filter(p => p.date && new Date(p.date).toDateString() === todayStr);
-        const pendingOrders = purchases.filter(p => !p.verified);
-        
-        const lowStockItems = products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock >= 0);
+    const pendingEl = document.getElementById('stat-pending');
+    if (pendingEl) pendingEl.style.color = pendingOrders.length > 0 ? '#dc2626' : '#1a1a1a';
 
-        setText('stat-today',    todayOrders.length);
-        setText('stat-pending',  pendingOrders.length);
-        setText('stat-lowstock', lowStockItems.length);
+    const lowEl = document.getElementById('stat-lowstock');
+    if (lowEl) lowEl.style.color = lowStockItems.length > 0 ? '#d97706' : '#1a1a1a';
 
-        const pendingEl = document.getElementById('stat-pending');
-        if (pendingEl) pendingEl.style.color = pendingOrders.length > 0 ? '#dc2626' : '#1a1a1a';
-
-        const lowEl = document.getElementById('stat-lowstock');
-        if (lowEl) lowEl.style.color = lowStockItems.length > 0 ? '#d97706' : '#1a1a1a';
-
-        // Low-stock list
-        const lowStockEl = document.getElementById('low-stock-list');
-        if (lowStockEl) {
-            if (lowStockItems.length === 0) {
-                lowStockEl.innerHTML = '<p class="dash-empty">All products are well stocked.</p>';
-            } else {
-                lowStockEl.innerHTML = lowStockItems
-                    .sort((a, b) => a.stock - b.stock)
-                    .map(p => {
-                        const pct   = Math.max(0, Math.min(100, (p.stock / LOW_STOCK_THRESHOLD) * 100));
-                        const color = p.stock === 0 ? '#dc2626' : p.stock <= 2 ? '#d97706' : '#f59e0b';
-                        return `
-                        <div class="low-stock-row">
-                          <div class="low-stock-info">
-                            <span class="low-stock-name">${escapeHtml(p.name)}</span>
-                            <span class="low-stock-badge" style="background:${color}">
-                              ${p.stock === 0 ? 'Out of Stock' : p.stock + ' left'}
-                            </span>
-                          </div>
-                          <div class="low-stock-bar-wrap">
-                            <div class="low-stock-bar" style="width:${pct}%;background:${color};"></div>
-                          </div>
-                        </div>`;
-                    }).join('');
-            }
-        }
-
-        // Recent orders (verified)
-        const recentEl = document.getElementById('recent-orders-list');
-        if (recentEl) {
-            const verifiedPurchases = purchases.filter(p => p.verified);
-            if (verifiedPurchases.length === 0) {
-                recentEl.innerHTML = '<p class="dash-empty">No verified orders yet.</p>';
-            } else {
-                const recent = [...verifiedPurchases]
-                    .sort((a, b) => new Date(b.verifiedDate || b.date) - new Date(a.verifiedDate || a.date))
-                    .slice(0, 8);
-                recentEl.innerHTML = recent.map(p => {
-                    const date       = p.date ? new Date(p.date).toLocaleString('en-NG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '\u2014';
-                    const methodLabel = p.fulfillmentMethod === 'delivery' ? 'Delivery' : 'Pickup';
-                    const statusCls  = p.verified ? 'order-verified' : 'order-pending';
-                    const statusText = p.verified ? 'Verified' : 'Pending';
-                    const items      = p.items ? p.items.map(i => `${i.quantity}\u00d7 ${escapeHtml(i.name)}`).join(', ') : '\u2014';
+    // Low-stock list
+    const lowStockEl = document.getElementById('low-stock-list');
+    if (lowStockEl) {
+        if (lowStockItems.length === 0) {
+            lowStockEl.innerHTML = '<p class="dash-empty">All products are well stocked.</p>';
+        } else {
+            lowStockEl.innerHTML = lowStockItems
+                .sort((a, b) => a.stock - b.stock)
+                .map(p => {
+                    const pct   = Math.max(0, Math.min(100, (p.stock / LOW_STOCK_THRESHOLD) * 100));
+                    const color = p.stock === 0 ? '#dc2626' : p.stock <= 2 ? '#d97706' : '#f59e0b';
                     return `
-                    <div class="order-row">
-                      <div class="order-row-left">
-                        <span class="order-method">${methodLabel}</span>
-                        <div>
-                          <div class="order-items">${items}</div>
-                          <div class="order-date">${date}</div>
-                        </div>
+                    <div class="low-stock-row">
+                      <div class="low-stock-info">
+                        <span class="low-stock-name">${escapeHtml(p.name)}</span>
+                        <span class="low-stock-badge" style="background:${color}">
+                          ${p.stock === 0 ? 'Out of Stock' : p.stock + ' left'}
+                        </span>
                       </div>
-                      <div class="order-row-right">
-                        <div class="order-amount">\u20a6${p.total ? p.total.toLocaleString('en-NG', { minimumFractionDigits: 2 }) : '0.00'}</div>
-                        <span class="order-status ${statusCls}">${statusText}</span>
+                      <div class="low-stock-bar-wrap">
+                        <div class="low-stock-bar" style="width:${pct}%;background:${color};"></div>
                       </div>
                     </div>`;
                 }).join('');
-            }
         }
-
-    } catch (e) {
-        console.error('Dashboard load error:', e);
-        notify.error('Could not load dashboard data.');
     }
+
+    // Recent orders (verified)
+    const recentEl = document.getElementById('recent-orders-list');
+    if (recentEl) {
+        const verifiedPurchases = purchases.filter(p => p.verified);
+        if (verifiedPurchases.length === 0) {
+            recentEl.innerHTML = '<p class="dash-empty">No verified orders yet.</p>';
+        } else {
+            const recent = [...verifiedPurchases]
+                .sort((a, b) => new Date(b.verifiedDate || b.date) - new Date(a.verifiedDate || a.date))
+                .slice(0, 8);
+            recentEl.innerHTML = recent.map(p => {
+                const date        = p.date ? new Date(p.date).toLocaleString('en-NG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '\u2014';
+                const methodLabel = p.fulfillmentMethod === 'delivery' ? 'Delivery' : 'Pickup';
+                const statusCls   = p.verified ? 'order-verified' : 'order-pending';
+                const statusText  = p.verified ? 'Verified' : 'Pending';
+                const items       = p.items ? p.items.map(i => `${i.quantity}\u00d7 ${escapeHtml(i.name)}`).join(', ') : '\u2014';
+                return `
+                <div class="order-row">
+                  <div class="order-row-left">
+                    <span class="order-method">${methodLabel}</span>
+                    <div>
+                      <div class="order-items">${items}</div>
+                      <div class="order-date">${date}</div>
+                    </div>
+                  </div>
+                  <div class="order-row-right">
+                    <div class="order-amount">\u20a6${p.total ? p.total.toLocaleString('en-NG', { minimumFractionDigits: 2 }) : '0.00'}</div>
+                    <span class="order-status ${statusCls}">${statusText}</span>
+                  </div>
+                </div>`;
+            }).join('');
+        }
+    }
+}
+
+// Cached products — refreshed each time loadDashboard() is called so low-stock
+// stays accurate after edits, but doesn't need a real-time listener.
+let _dashProducts = [];
+
+window.loadDashboard = async function() {
+    // Start (or restart) the live purchases listener if not already running
+    // for this store. If the storeId changes (shouldn't happen mid-session
+    // but guards against it), tear down the old listener first.
+    if (!_dashPurchasesUnsub) {
+        _dashPurchasesUnsub = onSnapshot(
+            custCol('purchases'),
+            (snap) => {
+                _dashPurchases = [];
+                snap.forEach(d => _dashPurchases.push(d.data()));
+                // Re-render every time Firestore pushes an update
+                _renderDashboard(_dashPurchases, _dashProducts);
+            },
+            (e) => {
+                console.error('Dashboard purchases listener error:', e);
+                notify.error('Could not load live dashboard data.');
+            }
+        );
+    }
+
+    // Always refresh products on tab switch so low-stock reflects recent edits
+    try {
+        const productsSnap = await getDocs(custCol('products'));
+        _dashProducts = [];
+        productsSnap.forEach(d => _dashProducts.push({ id: d.id, ...d.data() }));
+    } catch (e) {
+        console.error('Dashboard products load error:', e);
+        notify.error('Could not load product data.');
+    }
+
+    // Render immediately with whatever purchases we already have cached
+    // (the onSnapshot will also fire and re-render, but this avoids a blank
+    // dashboard while waiting for the first snapshot event).
+    _renderDashboard(_dashPurchases, _dashProducts);
 };
 
 //  Cashier profile modal 

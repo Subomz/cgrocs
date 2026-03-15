@@ -3,6 +3,8 @@ import { initializeApp, getApps }              from "https://www.gstatic.com/fir
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import { getFirestore, collection, onSnapshot, getDocs, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { headAdminConfig, adminConfig, customerConfig, storeCol, storeDoc, STORE_IDS, STORE_LABELS } from "./firebase-config.js";
+import { escapeHtml } from "./utils.js";
+
 
 //  Firebase 
 const adminApp    = getApps().find(a => a.name === 'head-admin-guard') || initializeApp(headAdminConfig, 'head-admin-guard');
@@ -56,7 +58,7 @@ function refreshStoreDropdowns() {
     const sel = document.getElementById(elId);
     if (!sel) return;
     const prev = sel.value;
-    sel.innerHTML = ids.map(id => `<option value="${id}">${getStoreLabel(id)}</option>`).join('');
+    sel.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(getStoreLabel(id))}</option>`).join('');
     if (ids.includes(prev)) sel.value = prev;
   });
 }
@@ -143,7 +145,7 @@ function injectStoreTabs() {
   wrap.innerHTML = `
     <button class="filter-pill active" data-sf="all" onclick="setStoreFilter(this)">All Stores</button>
     ${getStoreIds().map(id =>
-      `<button class="filter-pill" data-sf="${id}" onclick="setStoreFilter(this)">${getStoreLabel(id)}</button>`
+      `<button class="filter-pill" data-sf="${escapeHtml(id)}" onclick="setStoreFilter(this)">${escapeHtml(getStoreLabel(id))}</button>`
     ).join('')}`;
 }
 
@@ -262,28 +264,26 @@ function renderPurchaseList(list) {
   container.innerHTML = list.map(p => {
     const date   = p.date ? new Date(p.date).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     const amount = '₦' + (p.total ? p.total.toLocaleString('en-NG',{minimumFractionDigits:2}) : '0.00');
-    const items  = (p.items||[]).map(i=>`${i.quantity}× ${i.name}`).join(', ') || '—';
+    const items  = (p.items||[]).map(i=>`${escapeHtml(String(i.quantity))}× ${escapeHtml(i.name)}`).join(', ') || '—';
     const badge  = p.verified
       ? `<span class="badge badge-verified">Verified</span>`
       : `<span class="badge badge-pending">Pending</span>`;
     const cashierCol = p.verified
-      ? `<span class="cashier-chip"><span class="cashier-dot"></span>${resolveCashierName(p)}</span>`
+      ? `<span class="cashier-chip"><span class="cashier-dot"></span>${escapeHtml(resolveCashierName(p))}</span>`
       : `<span style="color:var(--muted);font-size:12px;">—</span>`;
     const storePill  = _currentRole === 'general'
-      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:4px;">${storeLabel(p._storeId)}</span>` : '';
-    const safeId = (p.id||'').replace(/'/g,"\\'");
-    const safeDocId = (p._docId||'').replace(/'/g,"\\'");
-    const safeStore = p._storeId || 'store1';
+      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:4px;">${escapeHtml(storeLabel(p._storeId))}</span>` : '';
+    // Use data attributes instead of building onclick strings from DB values — prevents injection
     const actionBtn = p.verified
-      ? `<button class="btn-reprint" onclick="reprintReceipt('${safeId}','${safeStore}')">Print</button>`
+      ? `<button class="btn-reprint ha-btn-action" data-id="${escapeHtml(p.id||'')}" data-store="${escapeHtml(p._storeId||'store1')}">Print</button>`
       : `<div style="display:flex;flex-direction:column;gap:4px;">
-           <button class="btn-verify-ha" onclick="verifyPurchaseHA('${safeDocId}','${safeId}','${safeStore}')">Verify</button>
-           <button class="btn-reprint" onclick="reprintReceipt('${safeId}','${safeStore}')">Print</button>
+           <button class="btn-verify-ha ha-btn-action" data-docid="${escapeHtml(p._docId||'')}" data-id="${escapeHtml(p.id||'')}" data-store="${escapeHtml(p._storeId||'store1')}">Verify</button>
+           <button class="btn-reprint ha-btn-action" data-id="${escapeHtml(p.id||'')}" data-store="${escapeHtml(p._storeId||'store1')}">Print</button>
          </div>`;
     return `
-    <div class="list-row lr-purchases" id="ha-row-${p._docId}">
-      <div><div class="row-id">${p.id||'—'}${storePill}</div>${badge}</div>
-      <div><div class="row-customer">${p.customerName||p.email||'Unknown'}</div><div class="row-items">${items}</div></div>
+    <div class="list-row lr-purchases" id="ha-row-${escapeHtml(p._docId||'')}">
+      <div><div class="row-id">${escapeHtml(p.id||'—')}${storePill}</div>${badge}</div>
+      <div><div class="row-customer">${escapeHtml(p.customerName||p.email||'Unknown')}</div><div class="row-items">${items}</div></div>
       <div class="row-amount">${amount}</div>
       <div class="col-cashier">${cashierCol}</div>
       <div class="row-date">${date}</div>
@@ -292,7 +292,20 @@ function renderPurchaseList(list) {
   }).join('');
 }
 
-//  By Cashier tab 
+// Event delegation for purchase-list action buttons.
+// Buttons are rebuilt on every render so we attach one listener to the
+// stable parent container rather than per-button onclick attributes.
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.ha-btn-action');
+  if (!btn) return;
+  if (btn.classList.contains('btn-verify-ha')) {
+    verifyPurchaseHA(btn.dataset.docid, btn.dataset.id, btn.dataset.store);
+  } else if (btn.classList.contains('btn-reprint')) {
+    reprintReceipt(btn.dataset.id, btn.dataset.store);
+  }
+});
+
+
 function buildCashierData() {
   _allCashiers = {};
   getAllPurchases().filter(p => p.verified).forEach(p => {
@@ -320,15 +333,15 @@ function renderCashierGrid() {
     const initials  = c.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || '?';
     const isSelected = _selectedCashier === key;
     const storePills = _currentRole === 'general'
-      ? [...c.storeIds].map(s => `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;">${storeLabel(s)}</span>`).join('')
+      ? [...c.storeIds].map(s => `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;">${escapeHtml(storeLabel(s))}</span>`).join('')
       : '';
     return `
-    <div class="cashier-summary-card${isSelected?' selected':''}" onclick="selectCashier('${key}')">
+    <div class="cashier-summary-card${isSelected?' selected':''}" data-cashier-key="${escapeHtml(key)}">
       <div class="cs-top">
-        <div class="cs-avatar">${initials}</div>
+        <div class="cs-avatar">${escapeHtml(initials)}</div>
         <div>
-          <div class="cs-name">${c.name}</div>
-          <div class="cs-email">${c.email !== 'unknown' ? c.email : '—'}</div>
+          <div class="cs-name">${escapeHtml(c.name)}</div>
+          <div class="cs-email">${c.email !== 'unknown' ? escapeHtml(c.email) : '—'}</div>
           <div style="margin-top:4px;">${storePills}</div>
         </div>
       </div>
@@ -339,6 +352,15 @@ function renderCashierGrid() {
     </div>`;
   }).join('');
 }
+
+// Use event delegation so cashier cards don't need onclick strings with raw DB keys
+document.addEventListener('click', e => {
+  const card = e.target.closest('.cashier-summary-card[data-cashier-key]');
+  if (!card) return;
+  _selectedCashier = card.dataset.cashierKey;
+  renderCashierGrid();
+  renderCashierDetail(_selectedCashier);
+});
 
 window.selectCashier = function(key) {
   _selectedCashier = key;
@@ -358,12 +380,12 @@ function renderCashierDetail(key) {
   listEl.innerHTML = sorted.map(p => {
     const verifiedAt = p.verifiedDate ? new Date(p.verifiedDate).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     const amount = '₦' + (p.total ? p.total.toLocaleString('en-NG',{minimumFractionDigits:2}) : '0.00');
-    const items  = (p.items||[]).map(i=>`${i.quantity}× ${i.name}`).join(', ') || '—';
+    const items  = (p.items||[]).map(i=>`${escapeHtml(String(i.quantity))}× ${escapeHtml(i.name)}`).join(', ') || '—';
     const storePill = _currentRole === 'general' && p._storeId
-      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:6px;">${storeLabel(p._storeId)}</span>` : '';
+      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:6px;">${escapeHtml(storeLabel(p._storeId))}</span>` : '';
     return `
     <div class="list-row lr-cashier">
-      <div class="row-id">${p.id||'—'}${storePill}</div>
+      <div class="row-id">${escapeHtml(p.id||'—')}${storePill}</div>
       <div class="row-amount">${amount}</div>
       <div class="row-items col-purchases">${items}</div>
       <div class="row-date">${verifiedAt}</div>
@@ -391,20 +413,17 @@ async function loadAccounts() {
     listEl.innerHTML = visible.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(a => {
       const isHead = a.role === 'Head Cashier' || a.role === 'Supervisor';
       const storePill = _currentRole === 'general' && a.storeId
-        ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:6px;">${storeLabel(a.storeId)}</span>` : '';
-      // Store-heads can only delete cashiers from their own store
+        ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:6px;">${escapeHtml(storeLabel(a.storeId))}</span>` : '';
       const canDelete = _currentRole === 'general' || _adminStores.includes(a.storeId || 'store1');
-      const safeUid   = (a.uid || '').replace(/'/g, "\\'");
-      const safeName  = (a.name || 'this account').replace(/'/g, "\\'");
       return `
-      <div class="account-row" id="acc-row-${a.uid}">
+      <div class="account-row" id="acc-row-${escapeHtml(a.uid)}">
         <div class="acc-info">
-          <div class="acc-name">${a.name||'—'}${storePill}</div>
-          <div class="acc-email">${a.email||'—'}</div>
+          <div class="acc-name">${escapeHtml(a.name||'—')}${storePill}</div>
+          <div class="acc-email">${escapeHtml(a.email||'—')}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-          <span class="acc-role-badge${isHead?' head':''}">${a.role||'Cashier'}</span>
-          ${canDelete ? `<button class="btn-delete-acc" onclick="deleteAccount('${safeUid}','${safeName}')" title="Delete account">&#128465;</button>` : ''}
+          <span class="acc-role-badge${isHead?' head':''}">${escapeHtml(a.role||'Cashier')}</span>
+          ${canDelete ? `<button class="btn-delete-acc ha-btn-del-acc" data-uid="${escapeHtml(a.uid||'')}" data-name="${escapeHtml(a.name||'this account')}" title="Delete account">&#128465;</button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -413,6 +432,13 @@ async function loadAccounts() {
     listEl.innerHTML = `<div class="list-empty" style="padding:28px;">Could not load accounts.</div>`;
   }
 }
+
+// Event delegation for account delete buttons
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.ha-btn-del-acc');
+  if (!btn) return;
+  deleteAccount(btn.dataset.uid, btn.dataset.name);
+});
 
 //  Delete Account
 window.deleteAccount = function(uid, name) {
@@ -616,9 +642,9 @@ function renderProductLogs(list) {
         ? `<span class="badge" style="background:#fee2e2;color:#dc2626;">Deleted</span>`
         : `<span class="badge" style="background:#fef9c3;color:#92400e;">Edited</span>`;
     const storePill  = _currentRole === 'general' && log._storeId
-      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-top:4px;display:inline-block;">${storeLabel(log._storeId)}</span>` : '';
+      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-top:4px;display:inline-block;">${escapeHtml(storeLabel(log._storeId))}</span>` : '';
     const changesHtml = (log.changes && log.changes.length > 0)
-      ? log.changes.map(c=>`<div class="prod-change-row"><span class="prod-change-field">${c.field}</span><span class="prod-change-from">${c.from}</span><span class="prod-change-arrow">→</span><span class="prod-change-to">${c.to}</span></div>`).join('')
+      ? log.changes.map(c=>`<div class="prod-change-row"><span class="prod-change-field">${escapeHtml(c.field)}</span><span class="prod-change-from">${escapeHtml(String(c.from))}</span><span class="prod-change-arrow">→</span><span class="prod-change-to">${escapeHtml(String(c.to))}</span></div>`).join('')
       : `<span style="color:var(--muted);font-size:12px;">${isAdd ? 'New product' : isDelete ? 'Product removed' : '—'}</span>`;
     const cashierDisplay = (log.cashierEmail && _cashierNameMap[log.cashierEmail.toLowerCase()])
       ? _cashierNameMap[log.cashierEmail.toLowerCase()]
@@ -626,8 +652,8 @@ function renderProductLogs(list) {
     return `
     <div class="list-row" style="grid-template-columns:1fr 1.5fr 1fr 2fr 1fr;align-items:start;">
       <div>${actionBadge}${storePill}</div>
-      <div class="row-customer">${log.productName||'—'}</div>
-      <div><span class="cashier-chip"><span class="cashier-dot"></span>${cashierDisplay}</span></div>
+      <div class="row-customer">${escapeHtml(log.productName||'—')}</div>
+      <div><span class="cashier-chip"><span class="cashier-dot"></span>${escapeHtml(cashierDisplay)}</span></div>
       <div class="prod-changes-wrap">${changesHtml}</div>
       <div class="row-date">${date}</div>
     </div>`;
@@ -655,8 +681,8 @@ window.loadSubaccountSettingsUI = async function loadSubaccountSettingsUI() {
   if (section) {
     const rows = visibleStores.map(storeId => `
       <div class="subaccount-status-row">
-        <span class="subaccount-store-name">${getStoreLabel(storeId)}</span>
-        <span id="subaccount-status-${storeId}" class="subaccount-status-value">Not configured — click Store Bank Accounts</span>
+        <span class="subaccount-store-name">${escapeHtml(getStoreLabel(storeId))}</span>
+        <span id="subaccount-status-${escapeHtml(storeId)}" class="subaccount-status-value">Not configured — click Store Bank Accounts</span>
       </div>`).join('');
     section.innerHTML = `<div class="subaccount-status-title">Account Status</div>${rows}`;
   }
@@ -715,7 +741,7 @@ window.openStoreBankSettings = async function() {
         ${storesToShow.map(storeId => `
         <div>
           <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:6px;padding-bottom:8px;border-bottom:1.5px solid #e4e4e7;">
-            ${getStoreLabel(storeId)}
+            ${escapeHtml(getStoreLabel(storeId))}
           </div>
           <div id="sbs-status-${storeId}" style="font-size:13px;color:#6b7280;margin-bottom:14px;min-height:18px;"></div>
 
@@ -921,39 +947,62 @@ function _renderStoreMgmtList() {
     return;
   }
   el.innerHTML = ids.map(id => `
-    <div id="store-row-${id}" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
-      <span style="font-size:13px;font-weight:600;color:#1a1a1a;flex:1;" id="store-lbl-${id}">${getStoreLabel(id)}</span>
-      <span style="font-size:11px;color:#9ca3af;font-family:monospace;">${id}</span>
-      <button onclick="window._editStoreInline('${id}')"
+    <div id="store-row-${escapeHtml(id)}" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
+      <span style="font-size:13px;font-weight:600;color:#1a1a1a;flex:1;" id="store-lbl-${escapeHtml(id)}">${escapeHtml(getStoreLabel(id))}</span>
+      <span style="font-size:11px;color:#9ca3af;font-family:monospace;">${escapeHtml(id)}</span>
+      <button class="ha-btn-store-edit" data-storeid="${escapeHtml(id)}"
         style="padding:5px 12px;background:white;border:1.5px solid #e4e4e7;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151;">
         Rename
       </button>
-      <button onclick="window._deleteStore('${id}')"
+      <button class="ha-btn-store-del" data-storeid="${escapeHtml(id)}"
         style="padding:5px 10px;background:#fff5f5;border:1.5px solid #fee2e2;border-radius:6px;font-size:12px;cursor:pointer;color:#dc2626;">
         &#215;
       </button>
     </div>`).join('');
 }
 
+// Event delegation for store management list buttons
+document.addEventListener('click', e => {
+  const editBtn = e.target.closest('.ha-btn-store-edit');
+  if (editBtn) { window._editStoreInline(editBtn.dataset.storeid); return; }
+  const delBtn = e.target.closest('.ha-btn-store-del');
+  if (delBtn) { window._deleteStore(delBtn.dataset.storeid); }
+});
+
 window._editStoreInline = function(id) {
   const row = document.getElementById(`store-row-${id}`);
   if (!row) return;
   const current = getStoreLabel(id);
+  const safeId  = escapeHtml(id);
   row.innerHTML = `
-    <input id="edit-store-input-${id}" type="text" value="${current}"
-      style="flex:1;padding:8px 12px;border:1.5px solid #0a0a0a;border-radius:6px;font-size:13px;font-family:inherit;outline:none;"
-      onkeydown="if(event.key==='Enter')window._saveStoreRename('${id}');if(event.key==='Escape')window._renderStoreMgmtList();">
-    <span style="font-size:11px;color:#9ca3af;font-family:monospace;">${id}</span>
-    <button onclick="window._saveStoreRename('${id}')"
+    <input id="edit-store-input-${safeId}" type="text" value="${escapeHtml(current)}"
+      style="flex:1;padding:8px 12px;border:1.5px solid #0a0a0a;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+    <span style="font-size:11px;color:#9ca3af;font-family:monospace;">${safeId}</span>
+    <button class="ha-btn-store-save" data-storeid="${safeId}"
       style="padding:5px 14px;background:#0a0a0a;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
       Save
     </button>
-    <button onclick="window._renderStoreMgmtList()"
+    <button class="ha-btn-store-cancel"
       style="padding:5px 10px;background:white;border:1.5px solid #e4e4e7;border-radius:6px;font-size:12px;cursor:pointer;">
       Cancel
     </button>`;
-  document.getElementById(`edit-store-input-${id}`)?.focus();
+  const input = document.getElementById(`edit-store-input-${safeId}`);
+  if (input) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  window._saveStoreRename(id);
+      if (e.key === 'Escape') window._renderStoreMgmtList();
+    });
+    input.focus();
+  }
 };
+// Event delegation for store inline-edit save/cancel buttons
+document.addEventListener('click', e => {
+  const saveBtn = e.target.closest('.ha-btn-store-save');
+  if (saveBtn) { window._saveStoreRename(saveBtn.dataset.storeid); return; }
+  const cancelBtn = e.target.closest('.ha-btn-store-cancel');
+  if (cancelBtn) { window._renderStoreMgmtList(); }
+});
+
 window._renderStoreMgmtList = _renderStoreMgmtList;
 
 window._saveStoreRename = async function(id) {
@@ -1170,21 +1219,19 @@ window._loadHeadAdminList = async function() {
     listEl.innerHTML = admins.sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(a => {
       const rolePill = a.role === 'general'
         ? `<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;border-radius:20px;padding:2px 8px;font-weight:700;">General</span>`
-        : `<span style="font-size:11px;background:#f4f4f5;color:#374151;border-radius:20px;padding:2px 8px;font-weight:600;">${getStoreLabel(a.storeId||'')}</span>`;
-      const safeUid  = (a.uid||'').replace(/'/g,"\\'");
-      const safeName = (a.name||'Head Admin').replace(/'/g,"\\'");
+        : `<span style="font-size:11px;background:#f4f4f5;color:#374151;border-radius:20px;padding:2px 8px;font-weight:600;">${escapeHtml(getStoreLabel(a.storeId||''))}</span>`;
       return `
-      <div id="ha-row-${a.uid}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
+      <div id="ha-row-${escapeHtml(a.uid)}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">${a.name||'—'}</div>
-          <div style="font-size:12px;color:#6b7280;">${a.email||'—'}</div>
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">${escapeHtml(a.name||'—')}</div>
+          <div style="font-size:12px;color:#6b7280;">${escapeHtml(a.email||'—')}</div>
         </div>
         ${rolePill}
-        <button onclick="window._openEditHeadAdmin('${safeUid}')"
+        <button class="ha-btn-edit-ha" data-uid="${escapeHtml(a.uid||'')}"
           style="padding:5px 12px;background:white;border:1.5px solid #e4e4e7;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151;flex-shrink:0;">
           Edit
         </button>
-        <button onclick="window._deleteHeadAdmin('${safeUid}','${safeName}')"
+        <button class="ha-btn-del-ha" data-uid="${escapeHtml(a.uid||'')}" data-name="${escapeHtml(a.name||'Head Admin')}"
           style="padding:5px 10px;background:#fff5f5;border:1.5px solid #fee2e2;border-radius:6px;font-size:12px;cursor:pointer;color:#dc2626;flex-shrink:0;">
           &#215;
         </button>
@@ -1194,6 +1241,14 @@ window._loadHeadAdminList = async function() {
     if (listEl) listEl.innerHTML = `<p style="font-size:13px;color:#dc2626;">Could not load accounts: ${e.message}</p>`;
   }
 };
+
+// Event delegation for head admin list edit/delete buttons
+document.addEventListener('click', e => {
+  const editBtn = e.target.closest('.ha-btn-edit-ha');
+  if (editBtn) { window._openEditHeadAdmin(editBtn.dataset.uid); return; }
+  const delBtn = e.target.closest('.ha-btn-del-ha');
+  if (delBtn) { window._deleteHeadAdmin(delBtn.dataset.uid, delBtn.dataset.name); }
+});
 
 window._createHeadAdmin = async function() {
   const name     = document.getElementById('ha-new-name')?.value.trim();
@@ -1284,7 +1339,7 @@ window._openEditHeadAdmin = async function(uid) {
       <div style="padding:24px;display:flex;flex-direction:column;gap:14px;">
         <div>
           <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Full Name</label>
-          <input id="hae-name" type="text" value="${profileData.name||''}"
+          <input id="hae-name" type="text" value="${escapeHtml(profileData.name||'')}"
             style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
             onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
         </div>

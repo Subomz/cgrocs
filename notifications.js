@@ -23,12 +23,25 @@ class NotificationSystem {
     notification.className = `notification notification-${type}`;
     
     const icons = { success: 'OK', error: 'X', warning: '!', info: 'i' };
-    
-    notification.innerHTML = `
-      <div class="notification-icon">${icons[type] || icons.info}</div>
-      <div class="notification-message">${message}</div>
-      <button class="notification-close" onclick="this.parentElement.remove()">×</button>
-    `;
+
+    // Build structure without innerHTML so message is never treated as HTML —
+    // this prevents XSS when callers pass user-controlled or Firestore strings.
+    const iconEl = document.createElement('div');
+    iconEl.className = 'notification-icon';
+    iconEl.textContent = icons[type] || icons.info;
+
+    const msgEl = document.createElement('div');
+    msgEl.className = 'notification-message';
+    msgEl.textContent = message;   // ← textContent, not innerHTML
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'notification-close';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => notification.remove());
+
+    notification.appendChild(iconEl);
+    notification.appendChild(msgEl);
+    notification.appendChild(closeBtn);
     
     this.container.appendChild(notification);
     setTimeout(() => notification.classList.add('show'), 10);
@@ -52,13 +65,15 @@ class NotificationSystem {
       <div class="confirm-modal-overlay"></div>
       <div class="confirm-modal-content">
         <div class="confirm-modal-icon">!</div>
-        <div class="confirm-modal-message">${message}</div>
+        <div class="confirm-modal-message"></div>
         <div class="confirm-modal-buttons">
           <button class="confirm-btn confirm-cancel">Cancel</button>
           <button class="confirm-btn confirm-yes">Confirm</button>
         </div>
       </div>
     `;
+    // Set message via textContent to prevent XSS
+    modal.querySelector('.confirm-modal-message').textContent = message;
     document.body.appendChild(modal);
     setTimeout(() => modal.classList.add('show'), 10);
 
@@ -78,14 +93,17 @@ class NotificationSystem {
       <div class="confirm-modal-overlay"></div>
       <div class="confirm-modal-content">
         <div class="confirm-modal-icon">!</div>
-        <div class="confirm-modal-message">${message}</div>
-        <input type="text" class="confirm-modal-input" value="${defaultValue}" placeholder="Enter value...">
+        <div class="confirm-modal-message"></div>
+        <input type="text" class="confirm-modal-input" placeholder="Enter value...">
         <div class="confirm-modal-buttons">
           <button class="confirm-btn confirm-cancel">Cancel</button>
           <button class="confirm-btn confirm-yes">Submit</button>
         </div>
       </div>
     `;
+    // Set message and default value safely to prevent XSS
+    modal.querySelector('.confirm-modal-message').textContent = message;
+    modal.querySelector('.confirm-modal-input').value = defaultValue;
     document.body.appendChild(modal);
     setTimeout(() => modal.classList.add('show'), 10);
 
