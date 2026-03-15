@@ -139,14 +139,15 @@ let _storeFilter = 'all';  // 'all' | storeId
 
 function injectStoreTabs() {
   const wrap = document.getElementById('store-filter-wrap');
+  const bar  = document.getElementById('store-picker-bar');
   if (!wrap) return;
 
   if (_currentRole !== 'general') {
-    wrap.style.display = 'none';
+    if (bar) bar.style.display = 'none';
     return;
   }
 
-  wrap.style.display = 'flex';
+  if (bar) bar.style.display = 'block';
   wrap.innerHTML = `
     <button class="filter-pill active" data-sf="all" onclick="setStoreFilter(this)">All Stores</button>
     ${getStoreIds().map(id =>
@@ -158,8 +159,12 @@ window.setStoreFilter = function(btn) {
   document.querySelectorAll('#store-filter-wrap .filter-pill').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _storeFilter = btn.dataset.sf;
+  // Refresh all four tabs so the selection is consistent everywhere
+  updateStats();
   applyPurchaseFilters();
   buildCashierData();
+  applyProductFilters();
+  loadAccounts();
 };
 
 //  Combined purchases across stores 
@@ -426,9 +431,11 @@ async function loadAccounts() {
       listEl.innerHTML = `<div class="list-empty" style="padding:28px;"><span class="list-empty-icon"></span>No accounts yet.</div>`;
       return;
     }
-    // If store-head, only show their store's cashiers
+    // Apply store filter: general admin filtered to a specific store sees only that store's cashiers
     const visible = _currentRole === 'general'
-      ? accounts
+      ? (_storeFilter === 'all'
+          ? accounts
+          : accounts.filter(a => (a.storeId || 'store1') === _storeFilter))
       : accounts.filter(a => !a.storeId || a.storeId === _adminStores[0]);
 
     listEl.innerHTML = visible.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(a => {
@@ -631,6 +638,8 @@ window.applyProductFilters = function() {
   const search  = (document.getElementById('prod-search')?.value || '').toLowerCase();
   const dateVal = document.getElementById('prod-date')?.value;
   let list = _allProdLogs;
+  // Apply shared store filter
+  if (_storeFilter !== 'all') list = list.filter(l => (l._storeId || 'store1') === _storeFilter);
   if (_prodFilter !== 'all') list = list.filter(l => l.action === _prodFilter);
   if (dateVal) {
     const picked = new Date(dateVal + 'T00:00:00').toDateString();

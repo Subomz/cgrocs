@@ -61,6 +61,11 @@
     <button class="drawer-tab"        onclick="switchTab('accounts',this);closeDrawer()">Manage Accounts</button>
   </div>
 
+  <!--  SHARED STORE PICKER — general admin only, visible across all tabs  -->
+  <div id="store-picker-bar" style="display:none;">
+    <div id="store-filter-wrap"></div>
+  </div>
+
   <!--  TAB 1: ALL PURCHASES  -->
   <div class="tab-content active" id="tab-purchases">
     <div class="page-wrap">
@@ -96,8 +101,7 @@
         </div>
       </div>
 
-      <!-- Store filter (general admin only — injected by JS) -->
-      <div id="store-filter-wrap" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+      <!-- Store filter (general admin only — now rendered by shared bar, not here) -->
 
       <!-- Filters -->
       <div class="filter-bar">
