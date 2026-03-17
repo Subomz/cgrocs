@@ -1,30 +1,11 @@
 // functions/api/create-head-admin.js
-// Creates a head admin Firebase Auth account + Firestore role/profile docs
-// in the HEAD ADMIN project (cloex-managerpage) using the Admin SDK.
-//
-// POST /api/create-head-admin
-// Body: { name, email, password, role, storeId }
-//
-// Requires Cloudflare environment variable:
-//   FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT — service account JSON from the
-//   cloex-managerpage Firebase project
+import { getAccessToken, fsSet, toFields, authCreate } from '../_firebase-rest.js';
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getAuth }                       from 'firebase-admin/auth';
-import { getFirestore }                  from 'firebase-admin/firestore';
-
-function getAdminApp(serviceAccountJson) {
-  const existing = getApps().find(a => a.name === 'head-admin-mgmt');
-  if (existing) return existing;
-  const serviceAccount = JSON.parse(serviceAccountJson);
-  return initializeApp({ credential: cert(serviceAccount) }, 'head-admin-mgmt');
-}
+const HEAD_ADMIN_PROJECT = 'cloex-managerpage';
 
 export async function onRequestPost(context) {
   const saJson = context.env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT;
-  if (!saJson) {
-    return Response.json({ error: 'FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT not configured.' }, { status: 500 });
-  }
+  if (!saJson) return Response.json({ error: 'FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT not configured.' }, { status: 500 });
 
   const { name, email, password, role, storeId } = await context.request.json();
 
@@ -38,30 +19,28 @@ export async function onRequestPost(context) {
     return Response.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
 
   try {
-    const app  = getAdminApp(saJson);
-    const auth = getAuth(app);
-    const db   = getFirestore(app);
+    const sa    = JSON.parse(saJson);
+    const token = await getAccessToken(sa);
 
     // Create Firebase Auth user
-    const userRecord = await auth.createUser({ email, password, displayName: name });
-    const uid = userRecord.uid;
+    const { uid } = await authCreate(HEAD_ADMIN_PROJECT, { email, password, displayName: name }, token);
 
-    // Write role document — read by auth guard on login
-    const roleDoc = { role, email, createdAt: new Date().toISOString() };
-    if (role === 'store-head') roleDoc.storeId = storeId;
+    // Write role doc
+    const roleData = { role, email, createdAt: new Date().toISOString() };
+    if (role === 'store-head') roleData.storeId = storeId;
 
-    // Write profile document — read by head-admin.js for display name
-    const profileDoc = { name, email, createdAt: new Date().toISOString() };
+    // Write profile doc
+    const profileData = { name, email, createdAt: new Date().toISOString() };
 
     await Promise.all([
-      db.collection('admins').doc(uid).set(roleDoc),
-      db.collection('headAdmins').doc(uid).set(profileDoc)
+      fsSet(HEAD_ADMIN_PROJECT, `admins/${uid}`,     toFields(roleData),    token),
+      fsSet(HEAD_ADMIN_PROJECT, `headAdmins/${uid}`, toFields(profileData), token)
     ]);
 
     return Response.json({ uid, name, email, role, storeId: storeId || null });
 
   } catch (e) {
-    console.error('[create-head-admin]', e);
+    console.error('[create-head-admin]', e.message);
     const code = e.errorInfo?.code;
     if (code === 'auth/email-already-exists')
       return Response.json({ error: 'This email is already registered.' }, { status: 400 });

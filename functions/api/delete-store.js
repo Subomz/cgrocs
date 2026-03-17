@@ -1,64 +1,35 @@
 // functions/api/delete-store.js
-// Deletes ALL Firestore data for a given storeId across all three Firebase projects:
-//   • Customer project   (cloexlogin-d466a)    → stores/{storeId}/*
-//   • Admin project      (cloexadminlogin)      → stores/{storeId}/*
-//   • Head-admin project (cloex-managerpage)    → transferSettings/stores[storeId]
-//                                                  storeConfig/list[storeId]
-//
-// POST /api/delete-store
-// Body: { storeId: "store1" }
-//
-// Requires Cloudflare environment variables:
-//   FIREBASE_CUSTOMER_SERVICE_ACCOUNT    → service account for cloexlogin-d466a
-//   FIREBASE_ADMIN_SERVICE_ACCOUNT       → service account for cloexadminlogin
-//   FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT  → service account for cloex-managerpage
+import { getAccessToken, fsGet, fsSet, fsDelete, fsList, fromDoc, toFields } from '../_firebase-rest.js';
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore }                  from 'firebase-admin/firestore';
+const CUSTOMER_PROJECT   = 'cloexlogin-d466a';
+const ADMIN_PROJECT      = 'cloexadminlogin';
+const HEAD_ADMIN_PROJECT = 'cloex-managerpage';
 
-function getApp(name, serviceAccountJson) {
-  const existing = getApps().find(a => a.name === name);
-  if (existing) return existing;
-  const serviceAccount = JSON.parse(serviceAccountJson);
-  return initializeApp({ credential: cert(serviceAccount) }, name);
-}
+const BATCH_SIZE = 100;
 
-function getCustomerDb(env) {
-  return getFirestore(getApp('del-store-customer', env.FIREBASE_CUSTOMER_SERVICE_ACCOUNT));
-}
-
-function getAdminDb(env) {
-  return getFirestore(getApp('del-store-admin', env.FIREBASE_ADMIN_SERVICE_ACCOUNT));
-}
-
-function getHeadAdminDb(env) {
-  return getFirestore(getApp('del-store-head-admin', env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT));
-}
-
-// ── Recursive collection deleter ─────────────────────────────────────────────
-const BATCH_SIZE = 400;
-
-async function deleteCollection(db, collectionRef) {
+async function deleteCollection(projectId, collectionPath, token) {
   let deleted = 0;
   while (true) {
-    const snap = await collectionRef.limit(BATCH_SIZE).get();
-    if (snap.empty) break;
-    const batch = db.batch();
-    snap.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
-    deleted += snap.size;
-    if (snap.size < BATCH_SIZE) break;
+    const docs = await fsList(projectId, collectionPath, token, BATCH_SIZE);
+    if (!docs.length) break;
+    await Promise.all(docs.map(doc => {
+      // doc.name is the full resource path — extract just the relative part
+      const parts    = doc.name.split('/documents/');
+      const docPath  = parts[1];
+      return fsDelete(projectId, docPath, token);
+    }));
+    deleted += docs.length;
+    if (docs.length < BATCH_SIZE) break;
   }
   return deleted;
 }
 
-async function deleteStoreData(db, storeId, collections) {
+async function deleteStoreData(projectId, storeId, collections, token) {
   const results = {};
   for (const col of collections) {
-    const ref = db.collection(`stores/${storeId}/${col}`);
-    results[col] = await deleteCollection(db, ref);
+    results[col] = await deleteCollection(projectId, `stores/${storeId}/${col}`, token);
   }
-  await db.doc(`stores/${storeId}`).delete().catch(() => {});
+  await fsDelete(projectId, `stores/${storeId}`, token);
   return results;
 }
 
@@ -70,7 +41,6 @@ export async function onRequestPost(context) {
   }
 
   const { storeId } = await context.request.json();
-
   if (!storeId || typeof storeId !== 'string' || !storeId.trim()) {
     return Response.json({ error: 'storeId is required.' }, { status: 400 });
   }
@@ -79,35 +49,40 @@ export async function onRequestPost(context) {
 
   try {
     // 1. Customer project
-    const customerDb = getCustomerDb(env);
-    log.customer = await deleteStoreData(customerDb, storeId, [
-      'products', 'purchases', 'categories', 'reservations'
-    ]);
+    const customerSa    = JSON.parse(env.FIREBASE_CUSTOMER_SERVICE_ACCOUNT);
+    const customerToken = await getAccessToken(customerSa);
+    log.customer = await deleteStoreData(CUSTOMER_PROJECT, storeId, ['products', 'purchases', 'categories', 'reservations'], customerToken);
 
     // 2. Admin project
-    const adminDb = getAdminDb(env);
-    log.admin = await deleteStoreData(adminDb, storeId, ['product_logs']);
+    const adminSa    = JSON.parse(env.FIREBASE_ADMIN_SERVICE_ACCOUNT);
+    const adminToken = await getAccessToken(adminSa);
+    log.admin = await deleteStoreData(ADMIN_PROJECT, storeId, ['product_logs'], adminToken);
 
     // 3. Head-admin project
-    const headAdminDb = getHeadAdminDb(env);
+    const headSa    = JSON.parse(env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT);
+    const headToken = await getAccessToken(headSa);
 
     // Remove from transferSettings/stores
-    const tsRef  = headAdminDb.doc('transferSettings/stores');
-    const tsSnap = await tsRef.get();
-    if (tsSnap.exists && tsSnap.data()?.[storeId]) {
-      const { [storeId]: _removed, ...rest } = tsSnap.data();
-      await tsRef.set(rest);
-      log.transferSettings = 'removed';
+    const tsSnap = await fsGet(HEAD_ADMIN_PROJECT, 'transferSettings/stores', headToken);
+    if (tsSnap) {
+      const tsData = fromDoc(tsSnap);
+      if (tsData?.[storeId]) {
+        delete tsData[storeId];
+        await fsSet(HEAD_ADMIN_PROJECT, 'transferSettings/stores', toFields(tsData), headToken);
+        log.transferSettings = 'removed';
+      } else {
+        log.transferSettings = 'not found';
+      }
     } else {
       log.transferSettings = 'not found';
     }
 
     // Remove from storeConfig/list
-    const scRef  = headAdminDb.doc('storeConfig/list');
-    const scSnap = await scRef.get();
-    if (scSnap.exists) {
-      const stores = (scSnap.data().stores || []).filter(s => s.id !== storeId);
-      await scRef.set({ stores });
+    const scSnap = await fsGet(HEAD_ADMIN_PROJECT, 'storeConfig/list', headToken);
+    if (scSnap) {
+      const scData = fromDoc(scSnap);
+      const stores = (scData?.stores || []).filter(s => s.id !== storeId);
+      await fsSet(HEAD_ADMIN_PROJECT, 'storeConfig/list', toFields({ stores }), headToken);
       log.storeConfig = 'removed';
     } else {
       log.storeConfig = 'not found';

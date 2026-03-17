@@ -1,22 +1,13 @@
 // functions/api/get-banks.js
-// Fetches the list of Nigerian banks from Paystack.
-// Secret key stays server-side in Cloudflare environment variables — never exposed to the browser.
-
-function paystackGet(path, secretKey) {
-  return fetch(`https://api.paystack.co${path}`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${secretKey}` }
-  }).then(r => r.json());
-}
-
 export async function onRequestGet(context) {
   const secret = context.env.PAYSTACK_SECRET_KEY;
-  if (!secret) {
-    return Response.json({ error: 'Paystack secret key not configured on server.' }, { status: 500 });
-  }
+  if (!secret) return Response.json({ error: 'Paystack secret key not configured on server.' }, { status: 500 });
 
   try {
-    const result = await paystackGet('/bank?currency=NGN&perPage=200', secret);
+    const result = await fetch('https://api.paystack.co/bank?currency=NGN&perPage=200', {
+      headers: { Authorization: `Bearer ${secret}` }
+    }).then(r => r.json());
+
     if (!result.status) {
       return Response.json({ error: result.message || 'Could not fetch banks from Paystack.' }, { status: 502 });
     }
