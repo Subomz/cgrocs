@@ -68,6 +68,7 @@ let _currentRole  = null;   // 'general' | 'store-head'
 let _adminStores  = [];     // stores this admin can see
 let _allPurchases = {};     // { store1: [...], store2: [...] }
 let _purchFilter  = 'all';
+let _purchPeriod  = 'all'; // 'day' | 'week' | 'month' | 'year' | 'all'
 let _allCashiers  = {};
 let _selectedCashier = null;
 let _purchUnsubs  = {};     // { store1: unsub, store2: unsub }
@@ -160,7 +161,6 @@ window.setStoreFilter = function(btn) {
   btn.classList.add('active');
   _storeFilter = btn.dataset.sf;
   // Refresh all four tabs so the selection is consistent everywhere
-  updateStats();
   applyPurchaseFilters();
   buildCashierData();
   applyProductFilters();
@@ -207,7 +207,6 @@ function startPurchasesListeners() {
         _allPurchases[storeId] = [];
         snap.forEach(d => _allPurchases[storeId].push({ ...d.data(), _docId: d.id, _storeId: storeId }));
         _allPurchases[storeId].sort((a, b) => new Date(b.date) - new Date(a.date));
-        updateStats();
         applyPurchaseFilters();
         buildCashierData();
       },
@@ -217,16 +216,12 @@ function startPurchasesListeners() {
 }
 
 //  Stats 
-function updateStats() {
-  const all      = getAllPurchases();
+function updateStats(filteredList) {
+  const all      = filteredList != null ? filteredList : getAllPurchases();
   const total    = all.length;
   const verified = all.filter(p => p.verified).length;
   const pending  = total - verified;
 
-  // Split revenue into goods value and service charge.
-  // cartSubtotal is the goods-only value saved since the revenue-split update.
-  // For older purchases that predate the field, fall back to total - serviceCharge,
-  // and if serviceCharge is also missing, treat the entire total as goods revenue.
   const verifiedPurchases = all.filter(p => p.verified);
   const goodsRevenue  = verifiedPurchases.reduce((s, p) => {
     const sc = p.serviceCharge || 0;
@@ -237,14 +232,19 @@ function updateStats() {
   setText('s-total',    total);
   setText('s-verified', verified);
   setText('s-pending',  pending);
-  // Store-head sees goods revenue only; general admin sees both (charge card shown in auth callback)
   setText('s-revenue', '₦' + goodsRevenue.toLocaleString('en-NG', { minimumFractionDigits: 2 }));
   if (_currentRole === 'general') {
     setText('s-charge-revenue', '₦' + chargeRevenue.toLocaleString('en-NG', { minimumFractionDigits: 2 }));
   }
 
+  const periodLabels = { day: 'Today', week: 'This Week', month: 'This Month', year: 'This Year', all: 'All Time' };
+  const dateVal = document.getElementById('purch-date')?.value;
+  const periodLabel = dateVal
+    ? new Date(dateVal + 'T00:00:00').toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
+    : (periodLabels[_purchPeriod] || 'All Time');
+
   const sub = document.getElementById('purch-subtitle');
-  if (sub) sub.textContent = `${total} purchase${total !== 1 ? 's' : ''} · live updates on`;
+  if (sub) sub.textContent = `${total} purchase${total !== 1 ? 's' : ''} · ${periodLabel} · live updates on`;
 }
 
 //  Purchase list 
@@ -255,17 +255,50 @@ window.setPurchFilter = function(btn) {
   applyPurchaseFilters();
 };
 
+window.setPurchPeriod = function(btn) {
+  document.querySelectorAll('#tab-purchases .filter-pill[data-p]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _purchPeriod = btn.dataset.p;
+  // Clear the date picker when a period button is used
+  const datePick = document.getElementById('purch-date');
+  if (datePick) datePick.value = '';
+  applyPurchaseFilters();
+};
+
 window.applyPurchaseFilters = function() {
   const search  = (document.getElementById('purch-search')?.value || '').toLowerCase().trim();
   const dateVal = document.getElementById('purch-date')?.value;
   let list      = getAllPurchases();
 
+  // Status filter
   if (_purchFilter === 'verified') list = list.filter(p => p.verified);
   if (_purchFilter === 'pending')  list = list.filter(p => !p.verified);
+
+  // Date picker overrides period buttons
   if (dateVal) {
     const picked = new Date(dateVal + 'T00:00:00').toDateString();
     list = list.filter(p => p.date && new Date(p.date).toDateString() === picked);
+  } else if (_purchPeriod !== 'all') {
+    const now        = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart  = new Date(todayStart);
+    weekStart.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7)); // Monday
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const yearStart  = new Date(now.getFullYear(), 0, 1);
+
+    list = list.filter(p => {
+      if (!p.date) return false;
+      const d = new Date(p.date);
+      switch (_purchPeriod) {
+        case 'day':   return d >= todayStart;
+        case 'week':  return d >= weekStart;
+        case 'month': return d >= monthStart;
+        case 'year':  return d >= yearStart;
+        default:      return true;
+      }
+    });
   }
+
   if (search) {
     list = list.filter(p => {
       return [p.id, p.customerName, p.email, (p.items||[]).map(i=>i.name).join(' '), p.verifiedByName, p.verifiedBy]
@@ -281,6 +314,7 @@ function storeLabel(storeId) {
 
 function renderPurchaseList(list) {
   if (!list) list = getAllPurchases();
+  updateStats(list);
   const container = document.getElementById('purch-list');
   if (!container) return;
   if (list.length === 0) {
