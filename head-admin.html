@@ -76,6 +76,16 @@
         </div>
       </div>
 
+      <!-- Period filter row -->
+      <div class="filter-bar" style="margin-top:8px;">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);align-self:center;white-space:nowrap;">Period:</span>
+        <button class="filter-pill" data-p="day"   onclick="setPurchPeriod(this)">Today</button>
+        <button class="filter-pill" data-p="week"  onclick="setPurchPeriod(this)">This Week</button>
+        <button class="filter-pill" data-p="month" onclick="setPurchPeriod(this)">This Month</button>
+        <button class="filter-pill" data-p="year"  onclick="setPurchPeriod(this)">This Year</button>
+        <button class="filter-pill active" data-p="all" onclick="setPurchPeriod(this)">All Time</button>
+      </div>
+
       <!-- Stats -->
       <div class="stat-strip">
         <div class="stat-card">
@@ -113,15 +123,6 @@
         <button class="filter-pill"        data-f="pending"  onclick="setPurchFilter(this)">Pending</button>
         <button class="filter-pill"        data-f="verified" onclick="setPurchFilter(this)">Verified</button>
         <input type="date" id="purch-date" class="filter-pill" style="cursor:pointer;" oninput="document.querySelectorAll('#tab-purchases .filter-pill[data-p]').forEach(b=>b.classList.remove('active'));_purchPeriod='all';applyPurchaseFilters()" title="Filter by date">
-      </div>
-      <!-- Period filter row -->
-      <div class="filter-bar" style="margin-top:8px;">
-        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);align-self:center;white-space:nowrap;">Period:</span>
-        <button class="filter-pill" data-p="day"   onclick="setPurchPeriod(this)">Today</button>
-        <button class="filter-pill" data-p="week"  onclick="setPurchPeriod(this)">This Week</button>
-        <button class="filter-pill" data-p="month" onclick="setPurchPeriod(this)">This Month</button>
-        <button class="filter-pill" data-p="year"  onclick="setPurchPeriod(this)">This Year</button>
-        <button class="filter-pill active" data-p="all" onclick="setPurchPeriod(this)">All Time</button>
       </div>
 
       <!-- List -->
