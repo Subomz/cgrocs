@@ -9,6 +9,20 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="head-admin.css">
   <script src="head-admin-auth-guard.js" type="module"></script>
+  <!-- Vercel Analytics -->
+    <script>
+     window.va = window.va || function () {
+        (window.vaq = window.vaq || []).push(arguments);
+        };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+    <!-- Vercel Speed Insights -->
+    <script>
+     window.si = window.si || function () {
+        (window.siq = window.siq || []).push(arguments);
+        };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
 
@@ -205,6 +219,7 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn-store-bank-settings general-admin-only" onclick="openStoreManagement()" style="display:none;">Manage Stores</button>
           <button class="btn-store-bank-settings general-admin-only" onclick="openHeadAdminManagement()" style="display:none;">Head Admins</button>
+          <button class="btn-store-bank-settings general-admin-only" onclick="openCopyProductsModal()" style="display:none;">Copy Products</button>
           <button class="btn-store-bank-settings" onclick="openStoreBankSettings()">Store Bank Accounts</button>
         </div>
       </div>

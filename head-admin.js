@@ -1474,3 +1474,146 @@ window._saveEditHeadAdmin = async function(uid) {
     btn.disabled = false; btn.textContent = 'Save Changes';
   }
 };
+
+// ── COPY PRODUCTS (general admin only) ───────────────────────────────────────
+
+window.openCopyProductsModal = function() {
+  const existing = document.getElementById('copy-products-modal');
+  if (existing) existing.remove();
+
+  const storeIds    = getStoreIds();
+  const storeOptions = storeIds.map(id =>
+    `<option value="${escapeHtml(id)}">${escapeHtml(getStoreLabel(id))}</option>`
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'copy-products-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
+
+      <!-- Header -->
+      <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Copy Products</h2>
+          <p style="margin:3px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">Copy all products from one store to another</p>
+        </div>
+        <button onclick="document.getElementById('copy-products-modal').remove()"
+          style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:28px 24px 24px;display:flex;flex-direction:column;gap:18px;">
+
+        <div style="background:#f4f4f5;border-radius:10px;padding:14px 16px;font-size:13px;color:#6b7280;line-height:1.6;">
+          ⚠️ This will <strong style="color:#0a0a0a;">add</strong> all products from the source store into the destination store.
+          Existing products in the destination store will <strong style="color:#0a0a0a;">not</strong> be deleted or overwritten.
+        </div>
+
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Copy From (Source)</label>
+          <select id="copy-from-store"
+            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;"
+            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+            ${storeOptions}
+          </select>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:20px;">↓</div>
+
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Copy To (Destination)</label>
+          <select id="copy-to-store"
+            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;"
+            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+            ${storeOptions}
+          </select>
+        </div>
+
+        <div id="copy-products-result" style="display:none;"></div>
+
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button onclick="document.getElementById('copy-products-modal').remove()"
+            style="flex:1;padding:12px;background:white;color:#111;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
+            Cancel
+          </button>
+          <button id="copy-products-btn" onclick="window._executeCopyProducts()"
+            style="flex:2;padding:12px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">
+            Copy Products
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  // Default second store to a different option if possible
+  const toSelect = document.getElementById('copy-to-store');
+  if (storeIds.length > 1) toSelect.value = storeIds[1];
+};
+
+window._executeCopyProducts = async function() {
+  const fromId  = document.getElementById('copy-from-store')?.value;
+  const toId    = document.getElementById('copy-to-store')?.value;
+  const btn     = document.getElementById('copy-products-btn');
+  const result  = document.getElementById('copy-products-result');
+
+  if (!fromId || !toId) {
+    notify.error('Please select both stores.'); return;
+  }
+  if (fromId === toId) {
+    notify.error('Source and destination stores must be different.'); return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Copying…';
+  result.style.display = 'none';
+
+  try {
+    // Read all products from source store
+    const sourceSnap = await getDocs(collection(custDb, storeCol(fromId, 'products')));
+
+    if (sourceSnap.empty) {
+      notify.warning(`No products found in ${getStoreLabel(fromId)}.`);
+      btn.disabled    = false;
+      btn.textContent = 'Copy Products';
+      return;
+    }
+
+    // Write each product to destination store using its original document ID
+    // so re-running this is safe — same doc ID = overwrite, not duplicate
+    const writes = sourceSnap.docs.map(d =>
+      setDoc(
+        doc(custDb, storeCol(toId, 'products'), d.id),
+        { ...d.data(), _copiedFrom: fromId, _copiedAt: new Date().toISOString() },
+        { merge: false }
+      )
+    );
+
+    await Promise.all(writes);
+
+    const count = sourceSnap.docs.length;
+    result.style.display = '';
+    result.innerHTML = `
+      <div style="background:#dcfce7;border-radius:8px;padding:12px 16px;font-size:13px;color:#16a34a;font-weight:600;">
+        ✓ Successfully copied ${count} product${count !== 1 ? 's' : ''} from
+        <strong>${escapeHtml(getStoreLabel(fromId))}</strong> to
+        <strong>${escapeHtml(getStoreLabel(toId))}</strong>.
+      </div>`;
+
+    btn.textContent = 'Done';
+    notify.success(`${count} product${count !== 1 ? 's' : ''} copied to ${getStoreLabel(toId)}!`);
+
+  } catch (e) {
+    console.error('[copy-products]', e);
+    result.style.display = '';
+    result.innerHTML = `
+      <div style="background:#fee2e2;border-radius:8px;padding:12px 16px;font-size:13px;color:#dc2626;font-weight:600;">
+        ✗ Copy failed: ${escapeHtml(e.message)}
+      </div>`;
+    btn.disabled    = false;
+    btn.textContent = 'Try Again';
+  }
+};
