@@ -475,3 +475,13 @@ body {
   font-weight: 600; color: var(--ink); min-width: 80px; flex-shrink: 0;
 }
 .subaccount-status-value { color: var(--muted); }
+
+/* ── Global modal scroll fix ──────────────────────────────────────────────────
+   Ensures any fixed overlay with long content scrolls from the top instead
+   of being cut off. Applies to current and future modals site-wide.
+   ─────────────────────────────────────────────────────────────────────────── */
+[style*="position:fixed"][style*="inset:0"],
+[style*="position: fixed"][style*="inset: 0"] {
+  overflow-y: auto !important;
+  align-items: flex-start !important;
+}

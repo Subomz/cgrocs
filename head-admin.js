@@ -626,21 +626,10 @@ window.reprintReceipt = function(purchaseId, storeId) {
       <table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
         ${(purchase.items||[]).map(i=>`<tr><td>${i.name}</td><td>${i.quantity}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
       </tbody></table>
-      <table style="margin-top:8px">
-        ${(purchase.serviceCharge && purchase.serviceCharge > 0) ? `
-        <tr style="border-top:1px solid #eee;">
-          <td colspan="3" style="text-align:right;color:#6b7280;padding:8px 10px;">Subtotal</td>
-          <td style="color:#6b7280;padding:8px 10px;">₦${Number(purchase.cartSubtotal != null ? purchase.cartSubtotal : (purchase.total - purchase.serviceCharge)).toFixed(2)}</td>
-        </tr>
-        <tr>
-          <td colspan="3" style="text-align:right;color:#6b7280;padding:4px 10px;">Service Charge</td>
-          <td style="color:#6b7280;padding:4px 10px;">₦${Number(purchase.serviceCharge).toFixed(2)}</td>
-        </tr>` : ''}
-        <tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
-          <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
-          <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
-        </tr>
-      </table></div>
+      <table style="margin-top:8px"><tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
+        <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
+        <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
+      </tr></table></div>
     <div class="footer"><p>Thank you for shopping with CGrocs!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
   printWindow.document.close();
@@ -800,10 +789,10 @@ window.openStoreBankSettings = async function() {
 
   const modal = document.createElement('div');
   modal.id = 'store-bank-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:580px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:580px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h2 style="margin:0;font-size:18px;font-weight:700;">Store Bank Accounts</h2>
@@ -978,10 +967,10 @@ window.openStoreManagement = async function() {
 
   const modal = document.createElement('div');
   modal.id = 'store-mgmt-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h2 style="margin:0;font-size:18px;font-weight:700;">Manage Stores</h2>
@@ -1183,12 +1172,12 @@ window.openHeadAdminManagement = async function() {
 
   const modal = document.createElement('div');
   modal.id = 'ha-mgmt-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
 
   const storeOptions = getStoreIds().map(id => `<option value="${id}">${getStoreLabel(id)}</option>`).join('');
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h2 style="margin:0;font-size:18px;font-weight:700;">Head Admin Accounts</h2>
@@ -1402,10 +1391,10 @@ window._openEditHeadAdmin = async function(uid) {
 
   const modal = document.createElement('div');
   modal.id = 'ha-edit-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:100000;padding:16px;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:100000;padding:16px;overflow-y:auto;';
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <h2 style="margin:0;font-size:17px;font-weight:700;">Edit Head Admin</h2>
         <button onclick="document.getElementById('ha-edit-modal').remove()"
