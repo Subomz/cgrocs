@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CloEx - Welcome</title>
-    <link rel="icon" type="image/x-icon" href="images/CloEx.png">
+    <title>CGrocs - Welcome</title>
+    <link rel="icon" type="image/x-icon" href="images/CGrocs.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="home.css">
@@ -25,17 +25,20 @@
 </head>
 <body>
     <nav class="home-nav">
-        <div class="navlogo"><img src="images/CloEx.png" alt="CloEx" width="44px"></div>
-        <button onclick="showStorePicker()" class="login-button">Login</button>
+        <div class="navlogo"><img src="images/CGrocs.png" alt="CGrocs" width="44px"></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <button onclick="showStorePicker()" class="switch-store-btn" id="switch-store-btn">Switch Store</button>
+            <button onclick="window.location.href='login.html'" class="login-button">Login</button>
+        </div>
     </nav>
 
     <!-- Store Picker Modal — cards populated dynamically from Firestore storeConfig -->
     <div class="store-picker-overlay" id="store-picker" style="display:none">
         <div class="store-picker-box">
             <div class="sp-header">
-                <img src="images/CloEx.png" alt="CloEx">
-                <h1>Welcome to CloEx</h1>
-                <p>Choose a store to continue</p>
+                <img src="images/CGrocs.png" alt="CGrocs">
+                <h1>Switch Store</h1>
+                <p>Choose which store to browse</p>
             </div>
             <div class="sp-body">
                 <span class="sp-label">Select your store</span>
@@ -47,13 +50,21 @@
         </div>
     </div>
 
-    <div id="store-preview-notice" class="store-preview-notice" style="display:none;">
-        <p>
-            Browsing <strong id="preview-store-name">—</strong> &nbsp;&middot;&nbsp;
-            <a href="#" onclick="showStorePicker();return false" class="preview-switch-link">Switch store</a>
-        </p>
-    </div>
     <div id="product-container-home" class="product-grid"></div>
+
+    <!-- Switch Store button style -->
+    <style>
+        .switch-store-btn {
+            padding: 8px 18px;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.20);
+            color: rgba(255,255,255,0.90);
+            border-radius: 20px; font-size: 14px; font-weight: 600;
+            cursor: pointer; font-family: var(--font);
+            transition: background 0.2s, color 0.2s;
+        }
+        .switch-store-btn:hover { background: rgba(255,255,255,0.22); color: white; }
+    </style>
 
     <script src="notifications.js"></script>
     <script src="cardstorage.js" type="module"></script>
@@ -70,7 +81,6 @@
         onAuthStateChanged(custAuth, user => { if (user) window.location.href = 'customer.html'; });
 
         // Load store list from Firestore; fall back to firebase-config.js defaults
-        // NOTE: Firestore security rules must allow unauthenticated reads of storeConfig/list
         async function loadStoreCards() {
             let stores = STORE_IDS.map(id => ({ id, label: STORE_LABELS[id] || id }));
             try {
@@ -82,7 +92,6 @@
                 }
             } catch(e) { /* rules may block unauthenticated reads — fallback is fine */ }
 
-            // Cache for label lookup
             window._storeLabels = Object.fromEntries(stores.map(s => [s.id, s.label]));
 
             const container = document.getElementById('store-cards-container');
@@ -99,42 +108,27 @@
             document.getElementById('store-picker').style.display = 'flex';
         };
 
+        // pickStore: switch which store is previewed on home page (no login redirect)
         window.pickStore = function(storeId) {
             sessionStorage.setItem('selectedStore', storeId);
-            // Cache label so customer.html nav can display it without another Firestore call
             if (window._storeLabels && window._storeLabels[storeId]) {
                 sessionStorage.setItem('storeLabel_' + storeId, window._storeLabels[storeId]);
             }
             document.getElementById('store-picker').style.display = 'none';
-            const label = (window._storeLabels && window._storeLabels[storeId]) || storeId;
-            const notice = document.getElementById('store-preview-notice');
-            const nameEl = document.getElementById('preview-store-name');
-            if (notice) notice.style.display = 'block';
-            if (nameEl) nameEl.textContent = label;
-            window.location.href = 'login.html';
+            // Reload products for the chosen store
+            if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
         };
 
         document.addEventListener('DOMContentLoaded', async function() {
-            const stored = sessionStorage.getItem('selectedStore');
-            if (!stored) {
-                showStorePicker();
-            } else {
-                // Show preview notice with the cached or default label
-                await loadStoreCards(); // ensure _storeLabels is populated
-                const label = (window._storeLabels && window._storeLabels[stored]) || stored;
-                const notice = document.getElementById('store-preview-notice');
-                const nameEl = document.getElementById('preview-store-name');
-                if (notice) notice.style.display = 'block';
-                if (nameEl) nameEl.textContent = label;
-                if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
+            if (!sessionStorage.getItem('selectedStore')) {
+                sessionStorage.setItem('selectedStore', 'store1');
             }
+            await loadStoreCards();
+            if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
         });
 
+        // Allow closing the picker by clicking the backdrop (only if a store is already selected)
         document.getElementById('store-picker').addEventListener('click', function(e) {
-            if (e.target === this && sessionStorage.getItem('selectedStore')) {
-                this.style.display = 'none';
-            }
+            if (e.target === this) this.style.display = 'none';
         });
     </script>
-</body>
-</html>

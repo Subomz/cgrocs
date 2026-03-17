@@ -443,7 +443,7 @@ window.downloadReceiptPDF = function(purchaseId) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CloEx Receipt — ${purchaseId}</title>
+  <title>CGrocs Receipt — ${purchaseId}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -555,7 +555,7 @@ window.downloadReceiptPDF = function(purchaseId) {
   <!-- Header -->
   <div class="header">
     <div>
-      <div class="brand-name">CloEx</div>
+      <div class="brand-name">CGrocs</div>
       <div class="brand-store">${storeLabel}</div>
     </div>
     <div class="receipt-label">
@@ -597,7 +597,7 @@ window.downloadReceiptPDF = function(purchaseId) {
 
   <!-- Footer -->
   <div class="footer">
-    Thank you for shopping at CloEx · ${storeLabel}<br>
+    Thank you for shopping at CGrocs · ${storeLabel}<br>
     Keep this receipt until your order is collected
   </div>
 

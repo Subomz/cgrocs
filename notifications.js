@@ -1,4 +1,4 @@
-// Unified Notification System for CloEx
+// Unified Notification System for CGrocs
 // This provides sleek, modern notifications instead of browser alerts
 
 class NotificationSystem {

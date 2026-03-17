@@ -1,5 +1,5 @@
 // ============================================================
-//  CloEx — utils.js
+//  CGrocs — utils.js
 //  Shared utility functions. Import wherever needed instead
 //  of copy-pasting.
 // ============================================================

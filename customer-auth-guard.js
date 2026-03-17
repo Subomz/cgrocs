@@ -50,12 +50,6 @@ onAuthStateChanged(auth, (user) => {
         console.log("User authenticated:", user.email);
         window.currentUser = user;
 
-        // If no store was selected (e.g. direct URL access), send back to home
-        if (!sessionStorage.getItem('selectedStore')) {
-            window.location.href = 'home.html';
-            return;
-        }
-
         document.body.style.visibility = 'visible';
         setTimeout(() => {
             loadingOverlay.style.opacity    = '0';

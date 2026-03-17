@@ -1,6 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { customerConfig, adminConfig, headAdminConfig } from "./firebase-config.js";
 
 const customerApp = getApps().find(a => a.name === 'cardstorage')
@@ -15,10 +14,6 @@ const headAdminApp = getApps().find(a => a.name === 'head-admin-guard')
 const customerAuth  = getAuth(customerApp);
 const adminAuth     = getAuth(adminApp);
 const headAdminAuth = getAuth(headAdminApp);
-
-// Firestore instances for store validation
-const adminDb     = getFirestore(adminApp);
-const headAdminDb = getFirestore(headAdminApp);
 
 //  Bug fix: also catch auth/invalid-login-credentials (Firebase v9+ with
 //    email-enumeration protection enabled returns this instead of
@@ -54,17 +49,13 @@ document.getElementById("submit").addEventListener("click", async function(e) {
     btn.disabled    = true;
     btn.textContent = "Signing in…";
 
-    const selectedStore = sessionStorage.getItem('selectedStore');
-
     //  Step 1: Try customer project 
     try {
         const cred = await signInWithEmailAndPassword(customerAuth, email, password);
         console.log("Customer login successful:", cred.user.email);
         notify.success("Login successful!");
-        // Ensure a store is selected
-        if (!selectedStore) {
-            sessionStorage.setItem('selectedStore', 'store1');
-        }
+        // Keep selectedStore from home.html — customer lands on the store they were browsing
+        if (!sessionStorage.getItem('selectedStore')) sessionStorage.setItem('selectedStore', 'store1');
         sessionStorage.setItem('tab_active', 'true');
         setTimeout(() => { window.location.href = "customer.html"; }, 500);
         return;
@@ -77,28 +68,9 @@ document.getElementById("submit").addEventListener("click", async function(e) {
         console.log("Not a customer account, trying admin…");
     }
 
-    //  Step 2: Try cashier (admin) project — validate store matches 
+    //  Step 2: Try cashier (admin) project 
     try {
         const cred = await signInWithEmailAndPassword(adminAuth, email, password);
-        const uid  = cred.user.uid;
-
-        // Fetch cashier profile to check their assigned store
-        let cashierStore = null;
-        try {
-            const snap = await getDoc(doc(adminDb, 'cashiers', uid));
-            cashierStore = snap.exists() ? (snap.data().storeId || 'store1') : 'store1';
-        } catch (e) {
-            console.warn("Could not fetch cashier profile for store check:", e.message);
-            cashierStore = 'store1';
-        }
-
-        // If a store is selected and it doesn't match, reject
-        if (selectedStore && cashierStore !== selectedStore) {
-            notify.error("Invalid email or password.");
-            resetBtn(btn);
-            return;
-        }
-
         console.log("Admin login successful:", cred.user.email);
         notify.success("Login successful!");
         sessionStorage.setItem('tab_active', 'true');
@@ -108,32 +80,9 @@ document.getElementById("submit").addEventListener("click", async function(e) {
         console.log("Admin login also failed:", adminErr.code);
     }
 
-    //  Step 3: Try head admin project — general admins bypass store check 
+    //  Step 3: Try head admin project 
     try {
         const cred = await signInWithEmailAndPassword(headAdminAuth, email, password);
-        const uid  = cred.user.uid;
-
-        // Fetch role to check if general or store-head
-        let role      = 'store-head';
-        let haStoreId = 'store1';
-        try {
-            const snap = await getDoc(doc(headAdminDb, 'admins', uid));
-            if (snap.exists()) {
-                role      = snap.data().role    || 'store-head';
-                haStoreId = snap.data().storeId || 'store1';
-            }
-        } catch (e) {
-            console.warn("Could not fetch head admin role for store check:", e.message);
-        }
-
-        // General admins can log in from any store
-        // Store-head admins must match the selected store
-        if (role !== 'general' && selectedStore && haStoreId !== selectedStore) {
-            notify.error("Invalid email or password.");
-            resetBtn(btn);
-            return;
-        }
-
         console.log("Head admin login successful:", cred.user.email);
         notify.success("Login successful!");
         sessionStorage.setItem('tab_active', 'true');

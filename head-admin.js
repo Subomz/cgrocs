@@ -575,7 +575,7 @@ window.reprintReceipt = function(purchaseId, storeId) {
     td{padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:14px}
     .footer{text-align:center;margin-top:36px;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px}
     </style></head><body>
-    <div class="rh"><h1>CloEx</h1><h2>Purchase Receipt${storeInfo ? ` · ${storeInfo}` : ''}</h2>
+    <div class="rh"><h1>CGrocs</h1><h2>Purchase Receipt${storeInfo ? ` · ${storeInfo}` : ''}</h2>
     ${purchase.verified?'<div class="badge v-badge"> VERIFIED</div>':'<div class="badge p-badge"> PENDING</div>'}
     </div>
     <div class="sec"><div class="sec-t">Customer</div>
@@ -596,7 +596,7 @@ window.reprintReceipt = function(purchaseId, storeId) {
         <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
         <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
       </tr></table></div>
-    <div class="footer"><p>Thank you for shopping with CloEx!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
+    <div class="footer"><p>Thank you for shopping with CGrocs!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
   printWindow.document.close();
 };
@@ -777,7 +777,7 @@ window.openStoreBankSettings = async function() {
 
           <div style="margin-bottom:12px;">
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Business / Account Name</label>
-            <input type="text" id="sbs-biz-${storeId}" placeholder="e.g. CloEx Store One"
+            <input type="text" id="sbs-biz-${storeId}" placeholder="e.g. CGrocs Store One"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
