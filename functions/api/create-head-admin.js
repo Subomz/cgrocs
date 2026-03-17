@@ -1,43 +1,44 @@
-// api/create-head-admin.js
+// functions/api/create-head-admin.js
 // Creates a head admin Firebase Auth account + Firestore role/profile docs
 // in the HEAD ADMIN project (cloex-managerpage) using the Admin SDK.
 //
 // POST /api/create-head-admin
 // Body: { name, email, password, role, storeId }
 //
-// Requires Vercel environment variable:
+// Requires Cloudflare environment variable:
 //   FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT — service account JSON from the
 //   cloex-managerpage Firebase project
-//   (Firebase Console → cloex-managerpage → Project Settings →
-//    Service Accounts → Generate new private key)
 
-const { initializeApp, getApps, cert } = require('firebase-admin/app');
-const { getAuth }                       = require('firebase-admin/auth');
-const { getFirestore }                  = require('firebase-admin/firestore');
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getAuth }                       from 'firebase-admin/auth';
+import { getFirestore }                  from 'firebase-admin/firestore';
 
-function getAdminApp() {
+function getAdminApp(serviceAccountJson) {
   const existing = getApps().find(a => a.name === 'head-admin-mgmt');
   if (existing) return existing;
-  const serviceAccount = JSON.parse(process.env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT);
+  const serviceAccount = JSON.parse(serviceAccountJson);
   return initializeApp({ credential: cert(serviceAccount) }, 'head-admin-mgmt');
 }
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+export async function onRequestPost(context) {
+  const saJson = context.env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT;
+  if (!saJson) {
+    return Response.json({ error: 'FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT not configured.' }, { status: 500 });
+  }
 
-  const { name, email, password, role, storeId } = req.body || {};
+  const { name, email, password, role, storeId } = await context.request.json();
 
   if (!name || !email || !password)
-    return res.status(400).json({ error: 'name, email, and password are required.' });
+    return Response.json({ error: 'name, email, and password are required.' }, { status: 400 });
   if (!['general', 'store-head'].includes(role))
-    return res.status(400).json({ error: 'role must be "general" or "store-head".' });
+    return Response.json({ error: 'role must be "general" or "store-head".' }, { status: 400 });
   if (role === 'store-head' && !storeId)
-    return res.status(400).json({ error: 'storeId is required for store-head role.' });
+    return Response.json({ error: 'storeId is required for store-head role.' }, { status: 400 });
   if (password.length < 6)
-    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    return Response.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
 
   try {
-    const app  = getAdminApp();
+    const app  = getAdminApp(saJson);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
@@ -57,17 +58,17 @@ module.exports = async function handler(req, res) {
       db.collection('headAdmins').doc(uid).set(profileDoc)
     ]);
 
-    return res.status(200).json({ uid, name, email, role, storeId: storeId || null });
+    return Response.json({ uid, name, email, role, storeId: storeId || null });
 
   } catch (e) {
     console.error('[create-head-admin]', e);
     const code = e.errorInfo?.code;
     if (code === 'auth/email-already-exists')
-      return res.status(400).json({ error: 'This email is already registered.' });
+      return Response.json({ error: 'This email is already registered.' }, { status: 400 });
     if (code === 'auth/invalid-email')
-      return res.status(400).json({ error: 'Please enter a valid email address.' });
+      return Response.json({ error: 'Please enter a valid email address.' }, { status: 400 });
     if (code === 'auth/weak-password')
-      return res.status(400).json({ error: 'Password is too weak.' });
-    return res.status(500).json({ error: e.message || 'Could not create account.' });
+      return Response.json({ error: 'Password is too weak.' }, { status: 400 });
+    return Response.json({ error: e.message || 'Could not create account.' }, { status: 500 });
   }
-};
+}

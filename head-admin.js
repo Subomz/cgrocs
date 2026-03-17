@@ -626,10 +626,21 @@ window.reprintReceipt = function(purchaseId, storeId) {
       <table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
         ${(purchase.items||[]).map(i=>`<tr><td>${i.name}</td><td>${i.quantity}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
       </tbody></table>
-      <table style="margin-top:8px"><tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
-        <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
-        <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
-      </tr></table></div>
+      <table style="margin-top:8px">
+        ${(purchase.serviceCharge && purchase.serviceCharge > 0) ? `
+        <tr style="border-top:1px solid #eee;">
+          <td colspan="3" style="text-align:right;color:#6b7280;padding:8px 10px;">Subtotal</td>
+          <td style="color:#6b7280;padding:8px 10px;">₦${Number(purchase.cartSubtotal != null ? purchase.cartSubtotal : (purchase.total - purchase.serviceCharge)).toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align:right;color:#6b7280;padding:4px 10px;">Service Charge</td>
+          <td style="color:#6b7280;padding:4px 10px;">₦${Number(purchase.serviceCharge).toFixed(2)}</td>
+        </tr>` : ''}
+        <tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
+          <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
+          <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
+        </tr>
+      </table></div>
     <div class="footer"><p>Thank you for shopping with CGrocs!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
   printWindow.document.close();
