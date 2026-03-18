@@ -8,6 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="profile.css">
+    <link rel="stylesheet" href="wallet.css">
+
+    <!-- Paystack (required for wallet top-up) -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
 
     <!-- Auth guard: redirect if not logged in -->
     <script src="customer-auth-guard.js" type="module"></script>
@@ -49,9 +53,10 @@
             <button class="btn-logout-side logout-button" type="button">Logout</button>
         </aside>
 
-        <!-- RIGHT: Edit form -->
+        <!-- RIGHT: Edit form + wallet + history -->
         <section class="profile-form-section">
 
+            <!-- Personal Information -->
             <div class="form-card">
                 <h3 class="form-card-title">Personal Information</h3>
 
@@ -74,6 +79,25 @@
                 <div class="form-field">
                     <label for="email-display">Email Address <span class="label-note">(cannot be changed)</span></label>
                     <input type="email" id="email-display" disabled>
+                </div>
+            </div>
+
+            <!-- ── WALLET CARD ── -->
+            <div class="wallet-card">
+                <div class="wallet-card-label">My Wallet</div>
+                <div class="wallet-card-balance" id="wallet-balance-display" data-wallet-balance>₦0.00</div>
+                <div class="wallet-card-actions">
+                    <button class="wallet-btn-topup" onclick="window.openWalletTopup()">
+                        + Top Up
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── WALLET TRANSACTION HISTORY ── -->
+            <div class="form-card">
+                <h3 class="form-card-title">Wallet History</h3>
+                <div class="wallet-tx-list" id="wallet-tx-list">
+                    <p class="wallet-empty">Loading transactions…</p>
                 </div>
             </div>
 

@@ -184,51 +184,98 @@ window.clearVerification = function() {
 window.printReceipt = async function(purchaseId) {
   let purchase = null;
   try {
-    const querySnapshot = await getDocs(col('purchases'));
-    querySnapshot.forEach((docSnap) => {
-      if (docSnap.data().id === purchaseId) purchase = docSnap.data();
-    });
+    const q   = query(col('purchases'), where('id', '==', purchaseId), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) purchase = snap.docs[0].data();
   } catch (e) { console.error('Error loading from Firestore:', e); }
-  if (!purchase) { notify.error("Purchase not found"); return; }
+  if (!purchase) { notify.error('Purchase not found'); return; }
 
-  const customerName  = purchase.customerName  || purchase.email || 'Unknown';
-  const customerPhone = purchase.customerPhone || '—';
-  const customerEmail = purchase.email         || '—';
+  const customerName  = escapeHtml(purchase.customerName  || purchase.email || 'Unknown');
+  const customerPhone = escapeHtml(purchase.customerPhone || '\u2014');
+  const customerEmail = escapeHtml(purchase.email         || '\u2014');
 
-  const printWindow = window.open('', '', 'width=800,height=700');
-  printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${escapeHtml(purchase.id)}</title>
-    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:28px;max-width:620px;margin:0 auto}
-    .rh{text-align:center;border-bottom:2px solid #111;padding-bottom:18px;margin-bottom:20px}
-    .rh h1{font-size:28px;font-weight:900}.rh h2{font-size:15px;color:#555;margin-top:4px}
-    .sec{margin:18px 0}.sec-t{font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:10px;border-bottom:1px solid #eee;padding-bottom:6px}
-    .dr{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
-    table{width:100%;border-collapse:collapse;margin-top:6px}
-    th{background:#f5f5f5;padding:9px 10px;text-align:left;font-size:12px}
-    td{padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:14px}
-    .footer{text-align:center;margin-top:36px;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px}
-    </style></head><body>
-    <div class="rh"><h1>CGrocs</h1><h2>Purchase Receipt</h2></div>
-    <div class="sec"><div class="sec-t">Customer</div>
-      <div class="dr"><span>Name</span><span>${escapeHtml(customerName)}</span></div>
-      <div class="dr"><span>Phone</span><span>${escapeHtml(customerPhone)}</span></div>
-      <div class="dr"><span>Email</span><span>${escapeHtml(customerEmail)}</span></div></div>
-    <div class="sec"><div class="sec-t">Order Info</div>
-      <div class="dr"><span>Purchase ID</span><span style="font-family:monospace">${escapeHtml(purchase.id)}</span></div>
-      <div class="dr"><span>Date</span><span>${new Date(purchase.date).toLocaleString()}</span></div>
-      <div class="dr"><span>Reference</span><span style="font-family:monospace">${escapeHtml(purchase.reference || '—')}</span></div>
-      ${purchase.verified ? `<div class="dr"><span>Verified</span><span>${new Date(purchase.verifiedDate).toLocaleString()}</span></div>` : ''}
-    </div>
-    <div class="sec"><div class="sec-t">Items</div>
-      <table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
-        ${purchase.items.map(i => `<tr><td>${escapeHtml(i.name)}</td><td>${escapeHtml(String(i.quantity))}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
-      </tbody></table>
-      <table style="margin-top:8px"><tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
-        <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
-        <td style="padding:12px 10px">₦${Number(purchase.total).toFixed(2)}</td>
-      </tr></table>
-    </div>
-    <div class="footer"><p>Thank you for shopping with CGrocs!</p><p style="margin-top:4px">${new Date().toLocaleString()}</p></div>
-    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  const storeId    = getStoreId();
+  const storeLabel = sessionStorage.getItem('storeLabel_' + storeId) || 'CGrocs';
+
+  const dateStr = new Date(purchase.date).toLocaleDateString('en-NG', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }).toUpperCase();
+
+  const items    = Array.isArray(purchase.items) ? purchase.items : [];
+  const charge   = purchase.serviceCharge || 0;
+  const subTotal = purchase.cartSubtotal  || (Number(purchase.total||0) - charge);
+
+  const itemRows = items.map(i => {
+    const price = Number(i.price)||0, qty = Number(i.quantity)||0;
+    return `<tr><td>${escapeHtml(i.name)}</td><td style="text-align:center;">${qty}</td><td style="text-align:right;">\u20a6${price.toFixed(2)}</td><td style="text-align:right;">\u20a6${(price*qty).toFixed(2)}</td></tr>`;
+  }).join('');
+
+  const chargeRows = charge > 0 ? `
+    <tr style="border-top:1px solid #e4e4e7;"><td colspan="3" style="text-align:right;color:#6b7280;">Subtotal</td><td style="text-align:right;color:#6b7280;">\u20a6${subTotal.toFixed(2)}</td></tr>
+    <tr><td colspan="3" style="text-align:right;color:#6b7280;">Service Charge</td><td style="text-align:right;color:#6b7280;">\u20a6${charge.toFixed(2)}</td></tr>` : '';
+
+  const verifiedRows = purchase.verified ? `
+    <div class="info-row"><span class="info-label">Verified At</span><span class="info-value">${new Date(purchase.verifiedDate).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
+    <div class="info-row"><span class="info-label">Verified By</span><span class="info-value">${escapeHtml(purchase.verifiedByName || purchase.verifiedBy || '\u2014')}</span></div>` : '';
+
+  const printWindow = window.open('', '', 'width=800,height=900');
+  printWindow.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>CGrocs Receipt \u2014 ${escapeHtml(purchase.id)}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;padding:40px 48px;max-width:600px;margin:0 auto;}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #0a0a0a;}
+.brand-name{font-size:26px;font-weight:800;letter-spacing:-0.5px;}.brand-store{font-size:13px;color:#6b7280;margin-top:4px;}
+.receipt-label{text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;}.receipt-date{font-size:13px;color:#111;margin-top:4px;}
+.section-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #e4e4e7;}
+.info-block{margin-bottom:24px;}
+.info-row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid #f4f4f5;font-size:14px;}
+.info-row:last-child{border-bottom:none;}.info-label{color:#6b7280;}.info-value{font-weight:500;text-align:right;font-family:inherit;}
+.info-value.mono{font-family:'Courier New',monospace;font-size:13px;}
+.items-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:10px;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+thead tr{background:#0a0a0a;color:#fff;}
+thead th{padding:9px 12px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;}
+thead th:first-child{text-align:left;border-radius:6px 0 0 6px;}thead th:last-child{text-align:right;border-radius:0 6px 6px 0;}
+tbody tr td{padding:10px 12px;border-bottom:1px solid #e4e4e7;vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+.total-row td{padding:12px;font-size:16px;font-weight:800;border-top:2px solid #0a0a0a!important;}
+.footer{margin-top:32px;padding-top:18px;border-top:1px solid #e4e4e7;text-align:center;font-size:12px;color:#9ca3af;line-height:1.8;}
+@media print{body{padding:20px;}@page{margin:12mm;size:A5 portrait;}}
+</style></head><body>
+
+<div class="header">
+  <div><div class="brand-name">CGrocs</div><div class="brand-store">${escapeHtml(storeLabel)}</div></div>
+  <div class="receipt-label">Payment Receipt<div class="receipt-date">${dateStr}</div></div>
+</div>
+
+<div class="info-block">
+  <div class="section-head">Customer</div>
+  <div class="info-row"><span class="info-label">Name</span><span class="info-value">${customerName}</span></div>
+  <div class="info-row"><span class="info-label">Phone</span><span class="info-value">${customerPhone}</span></div>
+  <div class="info-row"><span class="info-label">Email</span><span class="info-value">${customerEmail}</span></div>
+</div>
+
+<div class="info-block">
+  <div class="section-head">Order Info</div>
+  <div class="info-row"><span class="info-label">Purchase ID</span><span class="info-value mono">${escapeHtml(purchase.id)}</span></div>
+  <div class="info-row"><span class="info-label">Date</span><span class="info-value">${new Date(purchase.date).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
+  <div class="info-row"><span class="info-label">Reference</span><span class="info-value mono">${escapeHtml(purchase.reference || purchase.id || '\u2014')}</span></div>
+  ${verifiedRows}
+</div>
+
+<div class="items-title">Items Purchased</div>
+<table>
+  <thead><tr><th>Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Subtotal</th></tr></thead>
+  <tbody>
+    ${itemRows}${chargeRows}
+    <tr class="total-row"><td colspan="3" style="text-align:right;">Total Paid</td><td style="text-align:right;">\u20a6${Number(purchase.total||0).toFixed(2)}</td></tr>
+  </tbody>
+</table>
+
+<div class="footer">Thank you for shopping at CGrocs &middot; ${escapeHtml(storeLabel)}<br>Keep this receipt until your order is collected</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`);
   printWindow.document.close();
 };
 

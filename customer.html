@@ -8,11 +8,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="customer.css">
+    <link rel="stylesheet" href="wallet.css">
 
     <!-- Paystack -->
     <script src="https://js.paystack.co/v1/inline.js"></script>
     <script>
-      /* Keep --nav-h in sync so the cart sidebar always starts below the navbar */
       function setNavH() {
         const nav = document.querySelector('nav');
         if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
@@ -25,7 +25,7 @@
     <!-- QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-    <!-- AUTHENTICATION GUARD — must load first -->
+    <!-- AUTHENTICATION GUARD -->
     <script src="customer-auth-guard.js" type="module"></script>
 </head>
 <body style="visibility: hidden;">
@@ -44,6 +44,14 @@
 
         <div class="account">
             <button class="switch-store-btn" onclick="window.openStorePicker()" title="Switch Store">Switch Store</button>
+
+            <!-- Wallet balance badge (shown after auth) -->
+            <button class="wallet-nav-badge" id="wallet-nav-btn" style="display:none;"
+                    onclick="window.openWalletTopup()" title="Top up wallet">
+                <span class="wallet-nav-icon">&#9675;</span>
+                <span id="wallet-nav-balance" data-wallet-balance>&#8358;0.00</span>
+            </button>
+
             <div class="cart-trigger" onclick="toggleCart()">
                 Cart <span id="cart-count" class="empty">0</span>
             </div>
@@ -87,7 +95,8 @@
     <script src="notifications.js"></script>
     <script src="cardstorage.js" type="module"></script>
     <script src="cart.js" type="module"></script>
-    <!-- Store Picker Modal (shown on first login and via Switch Store button) -->
+
+    <!-- Store Picker Modal -->
     <div class="cust-store-overlay" id="cust-store-picker" style="display:none;">
         <div class="cust-store-box">
             <div class="cust-sp-header">
@@ -98,87 +107,40 @@
             <div class="cust-sp-body">
                 <span class="cust-sp-label">Select your store</span>
                 <div class="cust-store-cards" id="cust-store-cards-container">
-                    <p style="color:#6b7280;font-size:13px;text-align:center;grid-column:1/-1;">Loading stores…</p>
+                    <p style="color:#6b7280;font-size:13px;text-align:center;grid-column:1/-1;">Loading stores&#8230;</p>
                 </div>
             </div>
         </div>
     </div>
 
     <style>
-        /* Switch Store button in nav */
-        .switch-store-btn {
-            padding: 6px 14px; border-radius: 20px;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.20);
-            color: rgba(255,255,255,0.85);
-            font-size: 13px; font-weight: 600;
-            cursor: pointer; font-family: inherit;
-            transition: background 0.2s;
-            white-space: nowrap;
-        }
-        .switch-store-btn:hover { background: rgba(255,255,255,0.22); color: white; }
-
-        /* Store Picker Modal */
-        .cust-store-overlay {
-            position: fixed; inset: 0;
-            background: rgba(10,10,10,0.82);
-            backdrop-filter: blur(6px);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 99999; padding: 20px;
-        }
-        .cust-store-box {
-            background: white; border-radius: 20px;
-            max-width: 520px; width: 100%;
-            box-shadow: 0 24px 80px rgba(0,0,0,0.35);
-            overflow: hidden;
-            animation: cspPopIn .35s cubic-bezier(.34,1.56,.64,1) both;
-        }
-        @keyframes cspPopIn {
-            from { opacity: 0; transform: scale(.88) translateY(24px); }
-            to   { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .cust-sp-header {
-            background: #0a0a0a; color: white;
-            padding: 32px 32px 28px; text-align: center;
-        }
-        .cust-sp-header img { width: 52px; margin: 0 auto 14px; display: block; }
-        .cust-sp-header h1  { font-size: 22px; font-weight: 800; margin: 0 0 6px; }
-        .cust-sp-header p   { font-size: 14px; color: rgba(255,255,255,.6); margin: 0; }
-        .cust-sp-body { padding: 28px 28px 32px; }
-        .cust-sp-label {
-            font-size: 11px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .07em; color: #6b7280;
-            margin-bottom: 14px; text-align: center; display: block;
-        }
-        .cust-store-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .cust-store-card {
-            border: 2px solid #e4e4e7; border-radius: 14px;
-            padding: 22px 16px; text-align: center;
-            cursor: pointer; transition: all .2s;
-            background: white; font-family: inherit; width: 100%;
-        }
-        .cust-store-card:hover, .cust-store-card:focus {
-            border-color: #0a0a0a;
-            box-shadow: 0 4px 18px rgba(0,0,0,.12);
-            transform: translateY(-2px); outline: none;
-        }
-        .cust-store-card.active-store {
-            border-color: #0a0a0a;
-            background: #f4f4f5;
-        }
-        .cust-store-card .store-name { font-size: 16px; font-weight: 800; color: #1a1a1a; margin-bottom: 4px; }
-        .cust-store-card .store-desc { font-size: 12px; color: #6b7280; line-height: 1.4; }
-        @media (max-width: 420px) {
-            .cust-sp-header { padding: 24px 20px 20px; }
-            .cust-sp-body   { padding: 20px 16px 24px; }
-            .cust-store-cards { grid-template-columns: 1fr; }
-        }
+        .switch-store-btn { padding:6px 14px;border-radius:20px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.20);color:rgba(255,255,255,0.85);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.2s;white-space:nowrap; }
+        .switch-store-btn:hover { background:rgba(255,255,255,0.22);color:white; }
+        .cust-store-overlay { position:fixed;inset:0;background:rgba(10,10,10,0.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px; }
+        .cust-store-box { background:white;border-radius:20px;max-width:520px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.35);overflow:hidden;animation:cspPopIn .35s cubic-bezier(.34,1.56,.64,1) both; }
+        @keyframes cspPopIn { from{opacity:0;transform:scale(.88) translateY(24px);}to{opacity:1;transform:scale(1) translateY(0);} }
+        .cust-sp-header { background:#0a0a0a;color:white;padding:32px 32px 28px;text-align:center; }
+        .cust-sp-header img { width:52px;margin:0 auto 14px;display:block; }
+        .cust-sp-header h1  { font-size:22px;font-weight:800;margin:0 0 6px; }
+        .cust-sp-header p   { font-size:14px;color:rgba(255,255,255,.6);margin:0; }
+        .cust-sp-body { padding:28px 28px 32px; }
+        .cust-sp-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:14px;text-align:center;display:block; }
+        .cust-store-cards { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+        .cust-store-card { border:2px solid #e4e4e7;border-radius:14px;padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;background:white;font-family:inherit;width:100%; }
+        .cust-store-card:hover,.cust-store-card:focus { border-color:#0a0a0a;box-shadow:0 4px 18px rgba(0,0,0,.12);transform:translateY(-2px);outline:none; }
+        .cust-store-card.active-store { border-color:#0a0a0a;background:#f4f4f5; }
+        .cust-store-card .store-name { font-size:16px;font-weight:800;color:#1a1a1a;margin-bottom:4px; }
+        .cust-store-card .store-desc { font-size:12px;color:#6b7280;line-height:1.4; }
+        @media(max-width:420px){.cust-sp-header{padding:24px 20px 20px;}.cust-sp-body{padding:20px 16px 24px;}.cust-store-cards{grid-template-columns:1fr;}}
     </style>
 
+    <!-- Store picker + Wallet init -->
     <script type="module">
         import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
         import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-        import { headAdminConfig, STORE_IDS, STORE_LABELS } from "./firebase-config.js";
+        import { headAdminConfig, customerConfig, STORE_IDS, STORE_LABELS, PAYSTACK_PUBLIC_KEY } from "./firebase-config.js";
+        import { loadWalletBalance, setWalletContext } from "./wallet.js";
 
         let _custStoreLabels = {};
 
@@ -188,14 +150,10 @@
                 const haApp = getApps().find(a => a.name === 'home-ha') || initializeApp(headAdminConfig, 'home-ha');
                 const haDb  = getFirestore(haApp);
                 const snap  = await getDoc(doc(haDb, 'storeConfig', 'list'));
-                if (snap.exists() && Array.isArray(snap.data().stores) && snap.data().stores.length > 0) {
-                    stores = snap.data().stores;
-                }
-            } catch(e) { /* fallback is fine */ }
-
+                if (snap.exists() && Array.isArray(snap.data().stores) && snap.data().stores.length > 0) stores = snap.data().stores;
+            } catch(e) {}
             _custStoreLabels = Object.fromEntries(stores.map(s => [s.id, s.label]));
             window._custStoreLabels = _custStoreLabels;
-
             const container = document.getElementById('cust-store-cards-container');
             if (!container) return;
             const current = sessionStorage.getItem('selectedStore');
@@ -217,42 +175,58 @@
 
         window.custPickStore = function(storeId) {
             sessionStorage.setItem('selectedStore', storeId);
-            if (window._custStoreLabels && window._custStoreLabels[storeId]) {
+            if (window._custStoreLabels && window._custStoreLabels[storeId])
                 sessionStorage.setItem('storeLabel_' + storeId, window._custStoreLabels[storeId]);
-            }
-            // Update the store label in the nav
-            const label = (window._custStoreLabels && window._custStoreLabels[storeId]) || storeId;
+            const label    = (window._custStoreLabels && window._custStoreLabels[storeId]) || storeId;
             const navLabel = document.getElementById('customer-store-label');
             if (navLabel) navLabel.textContent = label;
-            // Close modal
-            const overlay = document.getElementById('cust-store-picker');
+            const overlay  = document.getElementById('cust-store-picker');
             if (overlay) overlay.style.display = 'none';
-            // Reload products for the new store
             if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
         };
 
-        // Close picker by clicking backdrop (only if a store is already chosen)
         document.getElementById('cust-store-picker').addEventListener('click', function(e) {
-            if (e.target === this && sessionStorage.getItem('selectedStore')) {
-                this.style.display = 'none';
-            }
+            if (e.target === this && sessionStorage.getItem('selectedStore')) this.style.display = 'none';
         });
 
-        // Update nav label from sessionStorage on load
         document.addEventListener('DOMContentLoaded', async function() {
-            const storeId = sessionStorage.getItem('selectedStore') || 'store1';
-            const cached  = sessionStorage.getItem('storeLabel_' + storeId);
+            const storeId  = sessionStorage.getItem('selectedStore') || 'store1';
+            const cached   = sessionStorage.getItem('storeLabel_' + storeId);
             const navLabel = document.getElementById('customer-store-label');
             if (navLabel) navLabel.textContent = cached || storeId;
         });
+
+        // Wallet
+        const custApp  = getApps().find(a => a.name === 'cardstorage') || initializeApp(customerConfig, 'cardstorage');
+        const custAuth = getAuth(custApp);
+
+        onAuthStateChanged(custAuth, async (user) => {
+            if (!user) return;
+            await loadCustStoreCards();
+            const storeId = sessionStorage.getItem('selectedStore') || 'store1';
+            const cached  = sessionStorage.getItem('storeLabel_' + storeId) || (_custStoreLabels[storeId] || storeId);
+            const labelEl = document.getElementById('customer-store-label');
+            if (labelEl) labelEl.textContent = cached;
+
+            const balance = await loadWalletBalance(user.uid);
+            const navBtn  = document.getElementById('wallet-nav-btn');
+            const navBal  = document.getElementById('wallet-nav-balance');
+            if (navBal) navBal.textContent  = '&#8358;' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+            if (navBtn) navBtn.style.display = 'flex';
+
+            setWalletContext(user.uid, user.email, PAYSTACK_PUBLIC_KEY, (newBalance) => {
+                if (navBal) navBal.textContent = '&#8358;' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+                document.dispatchEvent(new Event('wallet-updated'));
+            });
+            document.addEventListener('wallet-updated', () => {
+                if (typeof updateCartDisplay === 'function') updateCartDisplay();
+            });
+        });
     </script>
-</body>
-</html>
 
     <!-- My Orders Panel -->
     <div id="orders-overlay" class="orders-overlay" onclick="window.closeOrdersPopup()"></div>
     <div id="orders-panel" class="orders-panel">
-
         <div class="orders-panel-header">
             <div>
                 <h2 class="orders-panel-title">My Orders</h2>
@@ -260,34 +234,29 @@
             </div>
             <button onclick="window.closeOrdersPopup()" class="orders-panel-close">&#215;</button>
         </div>
-
-        <!-- Filter row -->
         <div class="orders-filter-row">
             <button class="ord-filt active" data-f="all"      onclick="window._ordFilter(this)">All</button>
             <button class="ord-filt"        data-f="pending"  onclick="window._ordFilter(this)">Pending</button>
             <button class="ord-filt"        data-f="verified" onclick="window._ordFilter(this)">Collected</button>
         </div>
-
         <div id="orders-list" class="orders-list-body"></div>
     </div>
 
     <script type="module">
         import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+        import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
         import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
         import { customerConfig, storeCol } from "./firebase-config.js";
 
         const existing = getApps().find(a => a.name === 'cardstorage');
-        const app = existing || initializeApp(customerConfig, 'cardstorage');
+        const app  = existing || initializeApp(customerConfig, 'cardstorage');
         const auth = getAuth(app);
-        const db  = getFirestore(app);
+        const db   = getFirestore(app);
 
-        /* Logout handler — called by the nav logout button */
         window.checkLogout = function() {
             sessionStorage.setItem('intentional_logout', 'true');
             signOut(auth).then(() => {
-                sessionStorage.clear();
-                window.location.href = 'home.html';
+                sessionStorage.clear(); window.location.href = 'home.html';
             }).catch(e => {
                 console.error('Logout error:', e);
                 sessionStorage.removeItem('intentional_logout');
@@ -295,20 +264,13 @@
             });
         };
 
-        /* Security fix: scope query to current user instead of reading all purchases */
         let _allOrders    = [];
         let _ordersFilter = 'all';
         let _ordersUnsub  = null;
 
-        /* Escape HTML to prevent XSS in dynamically rendered content */
-        function escapeHtml(str) {
+        function esc(str) {
             if (!str) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
         }
 
         window.openOrdersPopup = function() {
@@ -324,16 +286,12 @@
 
         window._loadOrders = function() {
             const listEl = document.getElementById('orders-list');
-            const uid = window.currentUser && window.currentUser.uid;
-            if (!uid) {
-                if (listEl) listEl.innerHTML = '<p class="orders-empty-msg">Not logged in.</p>';
-                return;
-            }
+            const uid    = window.currentUser && window.currentUser.uid;
+            if (!uid) { if (listEl) listEl.innerHTML = '<p class="orders-empty-msg">Not logged in.</p>'; return; }
             if (listEl) listEl.innerHTML = '<p style="text-align:center;padding:30px;color:#aaa;">Loading...</p>';
 
-            /* Bug fix: use store-aware path stores/{storeId}/purchases, scoped to current user */
             const storeId = sessionStorage.getItem('selectedStore') || 'store1';
-            _ordersUnsub = onSnapshot(
+            _ordersUnsub  = onSnapshot(
                 query(collection(db, storeCol(storeId, 'purchases')), where('uid', '==', uid)),
                 (snap) => {
                     _allOrders = [];
@@ -362,50 +320,41 @@
             if (!listEl) return;
 
             const filtered = _ordersFilter === 'verified' ? _allOrders.filter(p => p.verified)
-                : _ordersFilter === 'pending'  ? _allOrders.filter(p => !p.verified)
-                : _allOrders;
+                           : _ordersFilter === 'pending'  ? _allOrders.filter(p => !p.verified)
+                           : _allOrders;
 
-            if (subtitleEl) {
-                subtitleEl.textContent = _allOrders.length === 0
-                    ? 'No orders yet'
-                    : `${_allOrders.length} order${_allOrders.length !== 1 ? 's' : ''} total`;
-            }
+            if (subtitleEl) subtitleEl.textContent = _allOrders.length === 0 ? 'No orders yet'
+                : `${_allOrders.length} order${_allOrders.length !== 1 ? 's' : ''} total`;
 
             if (filtered.length === 0) {
-                listEl.innerHTML = `<div class="orders-empty-msg" style="padding:40px 20px;">
-                    <p style="font-size:14px;">No orders here.</p>
-                </div>`;
+                listEl.innerHTML = `<div class="orders-empty-msg" style="padding:40px 20px;"><p style="font-size:14px;">No orders here.</p></div>`;
                 return;
             }
 
             listEl.innerHTML = filtered.map(p => {
-                const items   = p.items ? p.items.map(i => `${i.quantity}\u00d7 ${escapeHtml(i.name)}`).join(', ') : '\u2014';
-                const dateStr = p.date ? new Date(p.date).toLocaleDateString('en-NG', { day:'numeric', month:'short', year:'numeric' }) : '\u2014';
-                const total   = p.total ? p.total.toLocaleString('en-NG', { minimumFractionDigits: 2 }) : '0.00';
-
+                const items   = p.items ? p.items.map(i => `${i.quantity}\u00d7 ${esc(i.name)}`).join(', ') : '\u2014';
+                const dateStr = p.date ? new Date(p.date).toLocaleDateString('en-NG',{day:'numeric',month:'short',year:'numeric'}) : '\u2014';
+                const total   = p.total ? p.total.toLocaleString('en-NG',{minimumFractionDigits:2}) : '0.00';
                 let badgeHtml;
-                if (p.verified) {
-                    badgeHtml = `<span class="ord-badge ord-badge-verified">Collected</span>`;
-                } else if (p.orderStatus === 'ready') {
+                if (p.verified) badgeHtml = `<span class="ord-badge ord-badge-verified">Collected</span>`;
+                else if (p.orderStatus === 'ready') {
                     const lbl = p.fulfillmentMethod === 'delivery' ? 'Out for Delivery' : 'Ready for Pickup';
                     badgeHtml = `<span class="ord-badge ord-badge-ready">${lbl}</span>`;
-                } else {
-                    badgeHtml = `<span class="ord-badge ord-badge-pending">Pending</span>`;
-                }
+                } else badgeHtml = `<span class="ord-badge ord-badge-pending">Pending</span>`;
 
-                const qrBtn = (!p.verified && p.id)
-                    ? `<button class="ord-qr-btn" onclick="window._ordShowQR('${escapeHtml(p.id)}', '${escapeHtml(items).replace(/'/g,"\\'")}', ${p.total || 0})">Show QR</button>`
+                // Pass only the ID; _ordShowQR looks up the full purchase from _allOrders
+                const qrBtn = p.id
+                    ? `<button class="ord-qr-btn" data-pid="${esc(p.id)}" onclick="window._ordShowQR(this.dataset.pid)">Show QR</button>`
                     : '';
 
                 return `
                 <div class="ord-card">
-                    <div class="ord-id">${escapeHtml(p.id) || '\u2014'}</div>
+                    <div class="ord-id">${esc(p.id)||'\u2014'}</div>
                     <div class="ord-items">${items}</div>
                     <div class="ord-date">${dateStr}</div>
                     <div class="ord-footer">
                         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                            <span class="ord-amount">&#8358;${total}</span>
-                            ${badgeHtml}
+                            <span class="ord-amount">&#8358;${total}</span>${badgeHtml}
                         </div>
                         ${qrBtn}
                     </div>
@@ -413,42 +362,212 @@
             }).join('');
         }
 
-        window._ordShowQR = function(purchaseId, itemsText, total) {
+        // ── Show QR — full receipt style matching the download receipt ────────
+        window._ordShowQR = function(purchaseId) {
             const existing = document.getElementById('ord-qr-modal');
             if (existing) existing.remove();
 
+            const p = _allOrders.find(o => o.id === purchaseId);
+            if (!p) { notify.error('Order not found.'); return; }
+
+            const storeId    = sessionStorage.getItem('selectedStore') || 'store1';
+            const storeLabel = sessionStorage.getItem('storeLabel_' + storeId) || 'CGrocs';
+            const dateStr    = p.date
+                ? new Date(p.date).toLocaleDateString('en-NG',{
+                    day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'
+                  }).toUpperCase()
+                : '\u2014';
+
+            const items    = Array.isArray(p.items) ? p.items : [];
+            const charge   = p.serviceCharge || 0;
+            const subTotal = p.cartSubtotal  || (Number(p.total||0) - charge);
+
+            const itemRowsHtml = items.map(i => {
+                const price = Number(i.price)||0, qty = Number(i.quantity)||0;
+                return `<tr>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;">${esc(i.name)}</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;text-align:center;">${qty}</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;text-align:right;">&#8358;${price.toFixed(2)}</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;text-align:right;">&#8358;${(price*qty).toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+
+            const chargeRowsHtml = charge > 0 ? `
+                <tr>
+                    <td colspan="3" style="padding:8px 12px;text-align:right;color:#6b7280;font-size:13px;border-bottom:1px solid #e4e4e7;">Subtotal</td>
+                    <td style="padding:8px 12px;text-align:right;color:#6b7280;font-size:13px;border-bottom:1px solid #e4e4e7;">&#8358;${subTotal.toFixed(2)}</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding:8px 12px;text-align:right;color:#6b7280;font-size:13px;border-bottom:1px solid #e4e4e7;">Service Charge</td>
+                    <td style="padding:8px 12px;text-align:right;color:#6b7280;font-size:13px;border-bottom:1px solid #e4e4e7;">&#8358;${charge.toFixed(2)}</td>
+                </tr>` : '';
+
             const modal = document.createElement('div');
             modal.id = 'ord-qr-modal';
-            modal.className = 'ord-qr-modal-overlay';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+
             modal.innerHTML = `
-                <div class="ord-qr-modal-box">
-                    <div class="ord-qr-modal-header">
-                        <h2 class="ord-qr-modal-title">Show to Cashier</h2>
-                        <button onclick="document.getElementById('ord-qr-modal').remove()" class="ord-qr-modal-close">&#215;</button>
+            <div style="background:white;border-radius:16px;width:100%;max-width:600px;box-shadow:0 24px 80px rgba(0,0,0,0.30);font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;max-height:92vh;overflow-y:auto;">
+
+                <!-- Sticky top bar -->
+                <div style="position:sticky;top:0;z-index:10;background:#0a0a0a;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:14px;font-weight:700;letter-spacing:.02em;">Purchase Receipt</span>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <button id="ord-dl-btn" style="padding:6px 16px;background:white;color:#0a0a0a;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Download PDF</button>
+                        <button onclick="document.getElementById('ord-qr-modal').remove()" style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">&#215;</button>
                     </div>
-                    <div class="ord-qr-modal-body">
-                        <p class="ord-qr-label">Purchase ID</p>
-                        <p class="ord-qr-id">${escapeHtml(purchaseId)}</p>
-                        <p class="ord-qr-items">${escapeHtml(itemsText)}</p>
-                        <p class="ord-qr-total">&#8358;${Number(total).toLocaleString('en-NG',{minimumFractionDigits:2})}</p>
-                        <div id="ord-qrcode" class="ord-qrcode-wrap"></div>
-                        <p class="ord-qr-hint">Scan or read the ID above to verify your purchase</p>
-                        <button onclick="document.getElementById('ord-qr-modal').remove()" class="btn-done">Done</button>
+                </div>
+
+                <!-- Receipt -->
+                <div style="padding:36px 40px 40px;">
+
+                    <!-- Header row -->
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:20px;border-bottom:2px solid #0a0a0a;">
+                        <div>
+                            <div style="font-size:26px;font-weight:800;letter-spacing:-0.5px;">CGrocs</div>
+                            <div style="font-size:13px;color:#6b7280;margin-top:4px;">${esc(storeLabel)}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;">Payment Receipt</div>
+                            <div style="font-size:13px;color:#111;margin-top:4px;">${dateStr}</div>
+                        </div>
                     </div>
-                </div>`;
+
+                    <!-- QR + ID section -->
+                    <div style="display:flex;align-items:center;gap:22px;background:#f4f4f5;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+                        <div id="ord-qrcode-wrap" style="flex-shrink:0;width:120px;height:120px;"></div>
+                        <div>
+                            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:6px;">Purchase ID</div>
+                            <div style="font-family:'Courier New',monospace;font-size:18px;font-weight:700;color:#0a0a0a;word-break:break-all;line-height:1.4;">${esc(p.id)}</div>
+                            <div style="font-size:11px;color:#9ca3af;margin-top:8px;">Show this to the cashier to collect your order</div>
+                        </div>
+                    </div>
+
+                    <!-- Items table -->
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:10px;">Items Purchased</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                        <thead>
+                            <tr style="background:#0a0a0a;color:#fff;">
+                                <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-radius:6px 0 0 6px;">Item</th>
+                                <th style="padding:9px 12px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Qty</th>
+                                <th style="padding:9px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Unit Price</th>
+                                <th style="padding:9px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-radius:0 6px 6px 0;">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemRowsHtml}
+                            ${chargeRowsHtml}
+                            <tr>
+                                <td colspan="3" style="padding:13px 12px;text-align:right;font-weight:700;font-size:15px;border-top:2px solid #0a0a0a;">Total Paid</td>
+                                <td style="padding:13px 12px;text-align:right;font-weight:800;font-size:15px;border-top:2px solid #0a0a0a;">&#8358;${Number(p.total||0).toLocaleString('en-NG',{minimumFractionDigits:2})}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Footer -->
+                    <div style="margin-top:28px;padding-top:16px;border-top:1px solid #e4e4e7;text-align:center;font-size:12px;color:#9ca3af;line-height:1.8;">
+                        Thank you for shopping at CGrocs &middot; ${esc(storeLabel)}<br>
+                        Keep this receipt until your order is collected
+                    </div>
+                </div>
+            </div>`;
+
             document.body.appendChild(modal);
             modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
+            // Render QR code
             setTimeout(() => {
+                const wrap = document.getElementById('ord-qrcode-wrap');
+                if (!wrap) return;
                 if (typeof QRCode !== 'undefined') {
-                    new QRCode(document.getElementById('ord-qrcode'), {
-                        text: purchaseId, width: 180, height: 180,
-                        colorDark: '#000000', colorLight: '#ffffff',
-                        correctLevel: QRCode.CorrectLevel.H
-                    });
+                    new QRCode(wrap, { text: p.id, width: 120, height: 120, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.H });
+                } else {
+                    wrap.innerHTML = '<div style="width:120px;height:120px;background:#e0e0e0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:11px;color:#999;text-align:center;">QR not available</div>';
                 }
             }, 50);
+
+            // Download PDF button
+            setTimeout(() => {
+                const dlBtn = document.getElementById('ord-dl-btn');
+                if (!dlBtn) return;
+                dlBtn.addEventListener('click', () => {
+                    const canvas   = modal.querySelector('#ord-qrcode-wrap canvas');
+                    const qrImgUrl = canvas ? canvas.toDataURL('image/png') : '';
+                    _printReceipt(p, storeLabel, qrImgUrl);
+                });
+            }, 100);
         };
+
+        // Print-ready receipt window (same visual design as modal)
+        function _printReceipt(p, storeLabel, qrImgUrl) {
+            const dateStr = p.date
+                ? new Date(p.date).toLocaleDateString('en-NG',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}).toUpperCase()
+                : '\u2014';
+            const items    = Array.isArray(p.items) ? p.items : [];
+            const charge   = p.serviceCharge || 0;
+            const subTotal = p.cartSubtotal  || (Number(p.total||0) - charge);
+
+            const itemRows = items.map(i => {
+                const price = Number(i.price)||0, qty = Number(i.quantity)||0;
+                return `<tr><td>${i.name}</td><td style="text-align:center;">${qty}</td><td style="text-align:right;">\u20a6${price.toFixed(2)}</td><td style="text-align:right;">\u20a6${(price*qty).toFixed(2)}</td></tr>`;
+            }).join('');
+
+            const chargeRows = charge > 0 ? `
+                <tr style="border-top:1px solid #e4e4e7;"><td colspan="3" style="text-align:right;color:#6b7280;">Subtotal</td><td style="text-align:right;color:#6b7280;">\u20a6${subTotal.toFixed(2)}</td></tr>
+                <tr><td colspan="3" style="text-align:right;color:#6b7280;">Service Charge</td><td style="text-align:right;color:#6b7280;">\u20a6${charge.toFixed(2)}</td></tr>` : '';
+
+            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>CGrocs Receipt \u2014 ${p.id}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;padding:40px 48px;max-width:600px;margin:0 auto;}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #0a0a0a;}
+.brand-name{font-size:26px;font-weight:800;letter-spacing:-0.5px;}.brand-store{font-size:13px;color:#6b7280;margin-top:4px;}
+.receipt-label{text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;}.receipt-date{font-size:13px;color:#111;margin-top:4px;}
+.qr-section{display:flex;align-items:center;gap:24px;background:#f4f4f5;border-radius:12px;padding:20px 24px;margin-bottom:28px;}
+.qr-section img{width:110px;height:110px;flex-shrink:0;}
+.qr-id-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:6px;}
+.qr-id{font-family:'Courier New',monospace;font-size:17px;font-weight:700;color:#0a0a0a;word-break:break-all;line-height:1.4;}
+.qr-hint{font-size:11px;color:#9ca3af;margin-top:8px;}
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:10px;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+thead tr{background:#0a0a0a;color:#fff;}
+thead th{padding:9px 12px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;}
+thead th:first-child{text-align:left;border-radius:6px 0 0 6px;}thead th:last-child{text-align:right;border-radius:0 6px 6px 0;}
+tbody tr td{padding:10px 12px;border-bottom:1px solid #e4e4e7;vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+.total-row td{padding:12px;font-size:16px;font-weight:800;border-top:2px solid #0a0a0a!important;}
+.footer{margin-top:32px;padding-top:18px;border-top:1px solid #e4e4e7;text-align:center;font-size:12px;color:#9ca3af;line-height:1.8;}
+@media print{body{padding:20px;}@page{margin:12mm;size:A5 portrait;}}
+</style></head><body>
+<div class="header">
+  <div><div class="brand-name">CGrocs</div><div class="brand-store">${storeLabel}</div></div>
+  <div class="receipt-label">Payment Receipt<div class="receipt-date">${dateStr}</div></div>
+</div>
+<div class="qr-section">
+  ${qrImgUrl ? `<img src="${qrImgUrl}" alt="QR Code">` : ''}
+  <div>
+    <div class="qr-id-label">Purchase ID</div>
+    <div class="qr-id">${p.id}</div>
+    <div class="qr-hint">Show this to the cashier to collect your order</div>
+  </div>
+</div>
+<div class="section-title">Items Purchased</div>
+<table>
+  <thead><tr><th>Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Subtotal</th></tr></thead>
+  <tbody>${itemRows}${chargeRows}<tr class="total-row"><td colspan="3" style="text-align:right;">Total Paid</td><td style="text-align:right;">\u20a6${Number(p.total||0).toFixed(2)}</td></tr></tbody>
+</table>
+<div class="footer">Thank you for shopping at CGrocs &middot; ${storeLabel}<br>Keep this receipt until your order is collected</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+
+            const win = window.open('', '_blank', 'width=700,height=900');
+            if (!win) { notify.error('Please allow pop-ups to download the receipt.'); return; }
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            win.onload = () => win.print();
+            setTimeout(() => { try { win.print(); } catch(e){} }, 600);
+        }
     </script>
 </body>
 </html>

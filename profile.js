@@ -2,7 +2,12 @@ import { initializeApp, getApps }        from "https://www.gstatic.com/firebasej
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs }
                                           from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-import { customerConfig, storeCol } from "./firebase-config.js";
+import { customerConfig, storeCol, PAYSTACK_PUBLIC_KEY } from "./firebase-config.js";
+import {
+  loadWalletBalance, loadWalletTransactions,
+  renderWalletBalance, renderWalletTransactions,
+  setWalletContext
+} from "./wallet.js";
 
 /* Security: escape all user-supplied or Firestore-sourced strings before
    injecting them into innerHTML to prevent XSS attacks. */
@@ -41,13 +46,44 @@ onAuthStateChanged(auth, async (user) => {
         window.currentUser = user;
         document.body.style.visibility = 'visible';
         await loadProfile(user.uid);
-        await loadPurchaseHistory(user.uid);
         setupLogoutButtons();
         setupAvatarInput(); // wire AFTER auth so profileData is ready
+
+        // ── Wallet ──────────────────────────────────────────────────────────
+        // Set context so the no-arg window.openWalletTopup() works from HTML
+        setWalletContext(
+          user.uid,
+          user.email,
+          PAYSTACK_PUBLIC_KEY,
+          (newBalance) => {
+            // Refresh the transaction list after a successful top-up
+            refreshWalletUI(user.uid);
+          }
+        );
+
+        // Load balance + transactions in parallel with purchase history
+        await Promise.all([
+          refreshWalletUI(user.uid),
+          loadPurchaseHistory(user.uid)
+        ]);
     } else {
         window.location.href = 'login.html';
     }
 });
+
+/** Load wallet balance + recent transactions and update the UI. */
+async function refreshWalletUI(uid) {
+  try {
+    const [balance, txns] = await Promise.all([
+      loadWalletBalance(uid),
+      loadWalletTransactions(uid, 20)
+    ]);
+    renderWalletBalance('wallet-balance-display', balance);
+    renderWalletTransactions('wallet-tx-list', txns);
+  } catch (e) {
+    console.warn('Could not refresh wallet UI:', e.message);
+  }
+}
 
 //  Load profile from Firestore 
 async function loadProfile(uid) {
@@ -83,9 +119,6 @@ async function loadProfile(uid) {
 }
 
 //  Avatar file input 
-// Fix #2: resizeImageToBase64 is no longer duplicated here — it is loaded
-// from the shared avatar-upload.js which exposes it on window.
-// profile.html now includes <script src="avatar-upload.js"></script>.
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB — hard block at file input
 
 // Called after auth resolves so profileData is populated before any save
@@ -165,13 +198,19 @@ window.saveProfile = async function() {
         uid:             currentUser.uid,
         avatar:          avatarToSave,   // always explicitly set
         updatedAt:       new Date().toISOString()
+        // NOTE: walletBalance is NOT included here — it is server-only.
+        // Even if it existed in profileData spread above, the Firestore rules
+        // block client writes to walletBalance, so this is doubly safe.
     };
+
+    // Explicitly remove walletBalance so a client can never accidentally overwrite it
+    delete updated.walletBalance;
 
     try {
         await setDoc(doc(db, "users", currentUser.uid), updated, { merge: true });
 
         // Update local state so subsequent saves also have the correct avatar
-        profileData = updated;
+        profileData = { ...updated, walletBalance: profileData.walletBalance };
         pendingAvatarBase64 = null; // clear pending — it's now saved
 
         // Refresh sidebar
@@ -266,6 +305,12 @@ function _renderPurchaseList() {
         const dateStr   = p.date ? new Date(p.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
         const verifiedDate = p.verifiedDate ? new Date(p.verifiedDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
 
+        // Payment method badge
+        const isWallet   = p.paymentMethod === 'wallet';
+        const methodBadge = isWallet
+          ? `<span style="font-size:11px;font-weight:700;background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:20px;margin-left:6px;">Wallet</span>`
+          : '';
+
         // Status badge — 3 states: not_ready → ready → verified
         let statusHtml;
         if (p.verified) {
@@ -284,8 +329,7 @@ function _renderPurchaseList() {
         const addrText    = p.deliveryAddress && p.deliveryAddress !== 'Store pickup'
             ? escapeHtml(p.deliveryAddress) : '';
 
-        // Security fix: use data-attributes instead of inline onclick with
-        // unescaped string interpolation — prevents XSS via malicious purchase IDs.
+        // Security fix: use data-attributes instead of inline onclick
         const qrBtn = safeId
             ? `<button class="btn-reshow-qr qr-trigger" data-id="${safeId}" data-total="${escapeHtml(String(p.total || 0))}">View QR</button>`
             : '';
@@ -294,7 +338,7 @@ function _renderPurchaseList() {
         <div class="purchase-item purchase-item--col">
             <div class="purchase-item__row">
                 <div class="purchase-meta">
-                    <p class="purchase-id">${safeId || '—'}</p>
+                    <p class="purchase-id">${safeId || '—'}${methodBadge}</p>
                     <p class="purchase-items-text">${itemsText}</p>
                     <p class="purchase-date">${dateStr}</p>
                 </div>
@@ -323,14 +367,12 @@ window._filterPurchases = function(btn) {
     _renderPurchaseList();
 };
 
-// Delegated click handler for "View QR" buttons — avoids inline onclick
-// with unescaped string interpolation in the HTML template.
+// Delegated click handler for "View QR" buttons
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('.qr-trigger');
     if (!btn) return;
     const purchaseId = btn.dataset.id;
     const total      = btn.dataset.total;
-    // Reconstruct items text from the rendered siblings for display only
     const card       = btn.closest('.purchase-item--col');
     const itemsEl    = card && card.querySelector('.purchase-items-text');
     const itemsText  = itemsEl ? itemsEl.textContent : '';
@@ -393,7 +435,7 @@ window._reshowQR = function(purchaseId, itemsText, total) {
     modal.querySelector('#qr-download-btn').addEventListener('click', () => window._downloadProfileQR(purchaseId));
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
-    // Generate QR code — needs qrcodejs loaded on the page
+    // Generate QR code
     setTimeout(() => {
         if (typeof QRCode !== 'undefined') {
             new QRCode(document.getElementById('profile-qrcode'), {

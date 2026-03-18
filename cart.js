@@ -1,6 +1,6 @@
 import { getFirestore, collection, addDoc, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { getApps, initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getActiveStore, storeCol, storeDoc, headAdminConfig } from "./firebase-config.js";
+import { getActiveStore, storeCol, storeDoc, headAdminConfig, PAYSTACK_PUBLIC_KEY } from "./firebase-config.js";
 import { escapeHtml } from "./utils.js";
 
 // Customer Firestore (purchases, reservations, products)
@@ -16,20 +16,10 @@ const haDb = getFirestore(haApp);
 function _col(name)        { return collection(db, storeCol(getActiveStore(), name)); }
 function _docRef(name, id) { return doc(db, storeDoc(getActiveStore(), name, id)); }
 
-// 
-// PAYSTACK CONFIG
-//   BEFORE GOING LIVE: replace the test key below with your live public key.
-//     Test key:  pk_test_...   → only works in test mode, no real charges
-//     Live key:  pk_live_...   → real charges, must be kept secret on the server
-//     Never commit your SECRET key (sk_...) here — this file is client-side.
-// 
-const PAYSTACK_PUBLIC_KEY = 'pk_live_e0c9caffa250105c691eb5a76f63adac7b07ca34'; // REPLACE WITH YOUR LIVE PUBLIC KEY
-
 // Cart management system
 let cart = [];
 window._cart = cart; // expose for window.checkLogout()
 // Tracks how many of each product index are currently in the cart.
-// Used to update the displayed stock in real time without touching Firestore.
 const reservedStock = {};  // { productIndex: quantity }
 
 // Customer name/phone loaded before payment opens so the receipt is populated.
@@ -37,12 +27,11 @@ let _profileName  = '';
 let _profilePhone = '';
 
 // Tracks Firestore reservation doc IDs so we can delete them on cancel/remove
-// Key: productIndex, Value: Firestore doc ID of the reservation
 const firestoreReservations = {};
 
 // Write a reservation to Firestore so other sessions see reduced available stock
 async function createFirestoreReservation(productId, productName, quantity, productIndex) {
-  if (!productId) return; // products without a Firestore ID can't be reserved
+  if (!productId) return;
   try {
     const sessionId = getOrCreateSessionId();
     const docRef = await addDoc(_col('reservations'), {
@@ -55,11 +44,9 @@ async function createFirestoreReservation(productId, productName, quantity, prod
     firestoreReservations[productIndex] = docRef.id;
   } catch (e) {
     console.warn('Could not create Firestore reservation:', e.message);
-    // Non-fatal — browser-side reservedStock still prevents double-adding in this session
   }
 }
 
-// Update an existing reservation quantity
 async function updateFirestoreReservation(productIndex, newQuantity) {
   const resDocId = firestoreReservations[productIndex];
   if (!resDocId) return;
@@ -70,7 +57,6 @@ async function updateFirestoreReservation(productIndex, newQuantity) {
   }
 }
 
-// Delete a single reservation from Firestore
 async function deleteFirestoreReservation(productIndex) {
   const resDocId = firestoreReservations[productIndex];
   if (!resDocId) return;
@@ -82,13 +68,11 @@ async function deleteFirestoreReservation(productIndex) {
   }
 }
 
-// Delete ALL reservations for this session (on cart clear / payment cancel / page unload)
 async function deleteAllFirestoreReservations() {
   const deletions = Object.keys(firestoreReservations).map(idx => deleteFirestoreReservation(parseInt(idx)));
   await Promise.allSettled(deletions);
 }
 
-// Get or create a stable session ID for this browser tab
 function getOrCreateSessionId() {
   let id = sessionStorage.getItem('cart_session_id');
   if (!id) {
@@ -100,12 +84,10 @@ function getOrCreateSessionId() {
   return id;
 }
 
-// On page unload, clean up Firestore reservations so they don't block other customers
 window.addEventListener('beforeunload', () => {
   deleteAllFirestoreReservations();
 });
 
-// Helper — get total Firestore-reserved quantity for a product (excluding this session)
 async function getFirestoreReservedQty(productId) {
   if (!productId) return 0;
   try {
@@ -122,11 +104,10 @@ async function getFirestoreReservedQty(productId) {
     });
     return total;
   } catch (e) {
-    return 0; // fail open — don't block the user
+    return 0;
   }
 }
 
-// Helper — update the stock label and buttons on a single product card
 function updateStockDisplay(productIndex) {
   const products = getProducts();
   const product  = products[productIndex];
@@ -135,7 +116,6 @@ function updateStockDisplay(productIndex) {
   const reserved   = reservedStock[productIndex] || 0;
   const displayed  = product.stock - reserved;
 
-  // Update the stock label text
   const card = document.querySelector(`#qty-${productIndex}`)?.closest('.card');
   if (!card) return;
 
@@ -145,33 +125,28 @@ function updateStockDisplay(productIndex) {
     stockLabel.className    = `stock-label${displayed <= 0 ? ' out-of-stock' : ''}`;
   }
 
-  // Update qty input max and +/- buttons
   const qtyInput = card.querySelector(`#qty-${productIndex}`);
   if (qtyInput) {
     qtyInput.max   = displayed;
     if (parseInt(qtyInput.value) > displayed) qtyInput.value = Math.max(displayed, 0);
   }
 
-  // Update the add-to-cart button
   const buyBtn = card.querySelector('.btn-buy');
   if (buyBtn) {
     buyBtn.disabled    = displayed <= 0;
     buyBtn.textContent = displayed > 0 ? 'Add to Cart' : 'Sold Out';
   }
 
-  // Update +/- buttons
   card.querySelectorAll('.qty-selector button').forEach(b => {
     b.disabled = displayed <= 0;
   });
 }
 
-// Restore all reserved stock to displayed (on cancel / clear)
 function restoreAllReservedStock() {
   Object.keys(reservedStock).forEach(idx => {
     delete reservedStock[idx];
     updateStockDisplay(parseInt(idx));
   });
-  // Clean up Firestore reservations so stock is released for other customers
   deleteAllFirestoreReservations();
 }
 
@@ -183,7 +158,6 @@ function getProducts() {
   if (typeof window.products !== 'undefined' && Array.isArray(window.products) && window.products.length > 0) {
     return window.products;
   }
-  
   try {
     const stored = localStorage.getItem('myProducts');
     if (stored && stored !== 'null') {
@@ -196,7 +170,6 @@ function getProducts() {
   } catch (e) {
     console.error('Error loading products:', e);
   }
-  
   return [{ name: "Sample Watch", stock: 20, price: 150, img: "https://placehold.co/300x200/f5f5f5/999?text=No+Image" }];
 }
 
@@ -217,7 +190,6 @@ window.addToCart = async function(productIndex) {
   const qtyInput = document.getElementById(`qty-${productIndex}`);
   const quantity = parseInt(qtyInput?.value || 1);
 
-  // Check actual available stock = real stock - other sessions' Firestore reservations
   const otherReserved  = await getFirestoreReservedQty(product.id);
   const thisReserved   = reservedStock[productIndex] || 0;
   const actualAvailable = product.stock - otherReserved - thisReserved;
@@ -228,7 +200,6 @@ window.addToCart = async function(productIndex) {
     } else {
       notify.warning(`Only ${actualAvailable} available (${otherReserved} reserved by others).`);
     }
-    // Update the display to reflect real availability
     const displayStock = Math.max(0, product.stock - otherReserved - thisReserved);
     const stockLabel = document.querySelector(`#qty-${productIndex}`)?.closest('.card')?.querySelector('.stock-label');
     if (stockLabel) {
@@ -257,13 +228,10 @@ window.addToCart = async function(productIndex) {
     });
   }
 
-  // Reserve visually on product card
   reservedStock[productIndex] = (reservedStock[productIndex] || 0) + quantity;
   updateStockDisplay(productIndex);
 
-  // Reserve in Firestore so other sessions see reduced available stock
   if (firestoreReservations[productIndex]) {
-    // Already have a reservation doc — just update the quantity
     updateFirestoreReservation(productIndex, reservedStock[productIndex]);
   } else {
     createFirestoreReservation(product.id, product.name, quantity, productIndex);
@@ -280,7 +248,6 @@ window.removeFromCart = function(cartIndex) {
     if (idx !== undefined) {
       reservedStock[idx] = Math.max(0, (reservedStock[idx] || 0) - item.quantity);
       updateStockDisplay(idx);
-      // Remove or reduce Firestore reservation
       if (reservedStock[idx] <= 0) {
         deleteFirestoreReservation(idx);
       } else {
@@ -309,19 +276,12 @@ window.clearCart = function() {
 }
 
 function generatePurchaseId() {
-  // 6 chars from a 62-char alphabet (A-Z, a-z, 0-9).
-  // 62^6 ~ 56 billion combinations — short enough to type, hard enough to guess.
   const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   const bytes = new Uint8Array(6);
   crypto.getRandomValues(bytes);
   return Array.from(bytes).map(b => CHARS[b % CHARS.length]).join('');
 }
 
-// Save purchase to Firestore — single source of truth.
-// localStorage is NOT used as a fallback: a purchase that only exists in the
-// customer's browser is invisible to the admin's verification system, meaning
-// the cashier would have no record of it and the customer could not be served.
-// If Firestore fails the error is surfaced to the customer so they can retry.
 async function savePurchase(purchaseData) {
   try {
     const docRef = await addDoc(_col("purchases"), purchaseData);
@@ -375,7 +335,6 @@ function showQRCodeModal(purchaseId, items, total, serviceCharge, cartSubtotal) 
 
   document.body.appendChild(modal);
 
-  // Store receipt data on the modal so downloadReceiptPDF can read it
   modal._receiptData = { purchaseId, items, total, serviceCharge, cartSubtotal, storeLabel };
 
   setTimeout(() => {
@@ -405,7 +364,6 @@ window.downloadReceiptPDF = function(purchaseId) {
   const data  = modal && modal._receiptData;
   if (!data) return;
 
-  // Get QR code as a base64 image from the canvas QRCode.js rendered
   const qrCanvas = document.querySelector('#qrcode canvas');
   const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : '';
 
@@ -415,7 +373,6 @@ window.downloadReceiptPDF = function(purchaseId) {
     hour: '2-digit', minute: '2-digit'
   });
 
-  // Build item rows
   const itemRows = items.map(item => {
     const price    = parseFloat(item.price);
     const subtotal = price * item.quantity;
@@ -428,7 +385,6 @@ window.downloadReceiptPDF = function(purchaseId) {
       </tr>`;
   }).join('');
 
-  // Service charge rows — only shown when a split is active
   const chargeRows = (serviceCharge && serviceCharge > 0) ? `
       <tr style="border-top:1px solid #e4e4e7;">
         <td colspan="3" style="text-align:right;color:#6b7280;">Subtotal</td>
@@ -446,113 +402,31 @@ window.downloadReceiptPDF = function(purchaseId) {
   <title>CGrocs Receipt — ${purchaseId}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: #fff;
-      color: #111;
-      padding: 40px 48px;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    /* ── Header ── */
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 28px;
-      padding-bottom: 20px;
-      border-bottom: 2px solid #0a0a0a;
-    }
-    .brand-name  { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111; padding: 40px 48px; max-width: 600px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #0a0a0a; }
+    .brand-name { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
     .brand-store { font-size: 13px; color: #6b7280; margin-top: 4px; }
-    .receipt-label {
-      text-align: right;
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .08em; color: #6b7280;
-    }
+    .receipt-label { text-align: right; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; }
     .receipt-date { font-size: 13px; color: #111; margin-top: 4px; }
-
-    /* ── QR + ID section ── */
-    .qr-section {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      background: #f4f4f5;
-      border-radius: 12px;
-      padding: 20px 24px;
-      margin-bottom: 28px;
-    }
+    .qr-section { display: flex; align-items: center; gap: 24px; background: #f4f4f5; border-radius: 12px; padding: 20px 24px; margin-bottom: 28px; }
     .qr-section img { width: 110px; height: 110px; flex-shrink: 0; }
-    .qr-text-block { flex: 1; }
     .qr-id-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #6b7280; margin-bottom: 6px; }
-    .qr-id {
-      font-family: 'Courier New', monospace;
-      font-size: 17px; font-weight: 700;
-      color: #0a0a0a;
-      word-break: break-all;
-      line-height: 1.4;
-    }
+    .qr-id { font-family: 'Courier New', monospace; font-size: 17px; font-weight: 700; color: #0a0a0a; word-break: break-all; line-height: 1.4; }
     .qr-hint { font-size: 11px; color: #9ca3af; margin-top: 8px; }
-
-    /* ── Items table ── */
-    .section-title {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .07em; color: #6b7280;
-      margin-bottom: 10px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-      font-size: 14px;
-    }
-    thead tr {
-      background: #0a0a0a; color: #fff;
-    }
-    thead th {
-      padding: 9px 12px;
-      font-weight: 700;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-    }
-    thead th:first-child  { text-align: left; border-radius: 6px 0 0 6px; }
-    thead th:last-child   { text-align: right; border-radius: 0 6px 6px 0; }
-    tbody tr td {
-      padding: 10px 12px;
-      border-bottom: 1px solid #e4e4e7;
-      vertical-align: middle;
-    }
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #6b7280; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+    thead tr { background: #0a0a0a; color: #fff; }
+    thead th { padding: 9px 12px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    thead th:first-child { text-align: left; border-radius: 6px 0 0 6px; }
+    thead th:last-child  { text-align: right; border-radius: 0 6px 6px 0; }
+    tbody tr td { padding: 10px 12px; border-bottom: 1px solid #e4e4e7; vertical-align: middle; }
     tbody tr:last-child td { border-bottom: none; }
-
-    /* ── Total row ── */
-    .total-row td {
-      padding: 12px 12px;
-      font-size: 16px; font-weight: 800;
-      border-top: 2px solid #0a0a0a !important;
-    }
-
-    /* ── Footer ── */
-    .footer {
-      margin-top: 32px;
-      padding-top: 18px;
-      border-top: 1px solid #e4e4e7;
-      text-align: center;
-      font-size: 12px;
-      color: #9ca3af;
-      line-height: 1.8;
-    }
-
-    @media print {
-      body { padding: 20px; }
-      @page { margin: 12mm; size: A5 portrait; }
-    }
+    .total-row td { padding: 12px 12px; font-size: 16px; font-weight: 800; border-top: 2px solid #0a0a0a !important; }
+    .footer { margin-top: 32px; padding-top: 18px; border-top: 1px solid #e4e4e7; text-align: center; font-size: 12px; color: #9ca3af; line-height: 1.8; }
+    @media print { body { padding: 20px; } @page { margin: 12mm; size: A5 portrait; } }
   </style>
 </head>
 <body>
-
-  <!-- Header -->
   <div class="header">
     <div>
       <div class="brand-name">CGrocs</div>
@@ -563,18 +437,14 @@ window.downloadReceiptPDF = function(purchaseId) {
       <div class="receipt-date">${dateStr}</div>
     </div>
   </div>
-
-  <!-- QR Code + Purchase ID -->
   <div class="qr-section">
     ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code">` : ''}
-    <div class="qr-text-block">
+    <div>
       <div class="qr-id-label">Purchase ID</div>
       <div class="qr-id">${purchaseId}</div>
       <div class="qr-hint">Show this to the cashier to collect your order</div>
     </div>
   </div>
-
-  <!-- Items -->
   <div class="section-title">Items Purchased</div>
   <table>
     <thead>
@@ -594,17 +464,13 @@ window.downloadReceiptPDF = function(purchaseId) {
       </tr>
     </tbody>
   </table>
-
-  <!-- Footer -->
   <div class="footer">
     Thank you for shopping at CGrocs · ${storeLabel}<br>
     Keep this receipt until your order is collected
   </div>
-
 </body>
 </html>`;
 
-  // Open a new window, write the receipt HTML, then trigger print → Save as PDF
   const win = window.open('', '_blank', 'width=700,height=900');
   if (!win) {
     notify.error('Please allow pop-ups to download the receipt.');
@@ -613,41 +479,30 @@ window.downloadReceiptPDF = function(purchaseId) {
   win.document.write(html);
   win.document.close();
   win.focus();
-  // Small delay so images (QR) fully load before print dialog opens
   win.onload = function() { win.print(); };
-  // Fallback if onload already fired
   setTimeout(() => { try { win.print(); } catch(e) {} }, 600);
 };
 
 // ---------------------------------------------------------------------------
-// Paystack callback & onClose MUST live on window (global scope).
-//
-// Paystack's inline.js validates callbacks with:  !(fn instanceof Function)
-// That check fails for functions created inside an ES module, because module
-// code runs in a separate realm/context.  Assigning to window puts them in
-// the same global scope Paystack expects, so instanceof passes.
+// Paystack global callbacks (must be on window — see original comment above)
 // ---------------------------------------------------------------------------
 
-// Temporary storage so the global callbacks can reach the closure data
 let _paystackPayload = null;
 
 window._paystackCallback = function(response) {
-  // Pull the frozen payload that proceedToPayment stored
   const payload = _paystackPayload;
   if (!payload) {
     console.error("Paystack callback fired but no payload found");
     return;
   }
-  _paystackPayload = null; // consume it
+  _paystackPayload = null;
 
-  // Destructure ALL fields from payload BEFORE nulling it
   const { purchaseId, cartSnapshot, total, serviceCharge, cartSubtotal } = payload;
 
   console.log('Payment successful:', response.reference);
 
   const products = getProducts();
 
-  // Deduct stock and persist to Firestore
   for (const item of cartSnapshot) {
     const product = products[item.productIndex];
     if (product) {
@@ -668,12 +523,10 @@ window._paystackCallback = function(response) {
     }
   }
 
-  // Persist updated products locally using store-aware key
   const activeStore = getActiveStore();
   localStorage.setItem(`myProducts_${activeStore}`, JSON.stringify(products));
   window.products = products;
 
-  // Use values already destructured from payload above
   const purchaseData = {
     id:        purchaseId,
     items:     cartSnapshot.map(item => ({
@@ -681,9 +534,9 @@ window._paystackCallback = function(response) {
       quantity: item.quantity,
       price:    item.price
     })),
-    total:        total,           // grand total (goods + service charge)
-    cartSubtotal: cartSubtotal,    // goods value only
-    serviceCharge: serviceCharge,  // service charge — used by head-admin revenue split
+    total,
+    cartSubtotal,
+    serviceCharge,
     date:      new Date().toISOString(),
     reference: response.reference,
     verified:  false,
@@ -691,17 +544,15 @@ window._paystackCallback = function(response) {
     uid:       (window.currentUser && window.currentUser.uid)   || '',
     email:     (window.currentUser && window.currentUser.email) || '',
     customerName:  _profileName  || '',
-    customerPhone: _profilePhone || ''
+    customerPhone: _profilePhone || '',
+    paymentMethod: 'paystack'
   };
 
-  // Payment complete — clear browser reservations and Firestore reservations
-  // (stock permanently deducted via updateProductInFirestore above)
   deleteAllFirestoreReservations();
   Object.keys(reservedStock).forEach(k => delete reservedStock[k]);
 
   savePurchase(purchaseData);
 
-  // Re-render product cards with updated stock
   if (typeof window.loadProducts === 'function') {
     window.loadProducts().then(function(updated) {
       window.products = updated;
@@ -713,45 +564,22 @@ window._paystackCallback = function(response) {
     });
   }
 
-  // Show QR modal (uses the frozen snapshot, not the now-empty live cart)
   showQRCodeModal(purchaseId, cartSnapshot, total, serviceCharge, cartSubtotal);
 
-  // Clear the live cart
   cart = [];
   updateCartDisplay();
 
-  // Close the cart sidebar
   var cartPopup = document.getElementById('cart-popup');
   if (cartPopup) cartPopup.classList.remove('active');
 };
 
 window._paystackOnClose = function() {
   notify.info('Payment window closed.');
-  // Payment was abandoned — restore the reserved stock display
   restoreAllReservedStock();
 };
 
+// ── Paystack split config ─────────────────────────────────────────────────────
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  PAYSTACK SPLIT — subaccount codes per store
-//
-//  Service charge tiers (added ON TOP of cart total — customer pays):
-//    Cart total < ₦1,000   →  ₦50  surcharge
-//    Cart total < ₦10,000  →  ₦100 surcharge
-//    Cart total ≥ ₦10,000  →  ₦150 surcharge
-//
-//  Paystack config:
-//    amount:             (cart total + surcharge) × 100 kobo  — what customer pays
-//    subaccount:         store's subaccount_code              — store receives cart total
-//    transaction_charge: surcharge × 100 kobo                — primary account receives surcharge
-//    bearer:             "account"                           — primary account bears Paystack fees
-//
-//  If no subaccount is configured the surcharge is still added to the customer's
-//  total (it all settles to the primary Paystack account).
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Cache subaccount codes for the session so we don't re-fetch on every payment
 const _subaccountCache = {};
 
 async function getStoreSubaccountCode(storeId) {
@@ -770,14 +598,14 @@ async function getStoreSubaccountCode(storeId) {
   return _subaccountCache[storeId] || null;
 }
 
-// Returns the service charge (in naira) to add on top of the cart total
 function getServiceCharge(cartTotal) {
   if (cartTotal < 1000)  return 50;
   if (cartTotal < 10000) return 100;
   return 150;
 }
 
-//  Proceed to payment 
+// ── Paystack payment ──────────────────────────────────────────────────────────
+
 window.proceedToPayment = async function() {
   if (cart.length === 0) {
     notify.warning("Your cart is empty!");
@@ -798,7 +626,6 @@ window.proceedToPayment = async function() {
     return;
   }
 
-  // Await profile load so name/phone are ready before Paystack callback fires
   _profileName  = '';
   _profilePhone = '';
   if (window.currentUser && window.currentUser.uid) {
@@ -814,36 +641,33 @@ window.proceedToPayment = async function() {
 
   var cartTotal      = calculateTotal();
   var serviceCharge  = getServiceCharge(cartTotal);
-  var grandTotal     = cartTotal + serviceCharge;   // what the customer actually pays
+  var grandTotal     = cartTotal + serviceCharge;
   var purchaseId     = generatePurchaseId();
   var paystackRef    = purchaseId.replace(/-/g, '');
   var cartSnapshot   = cart.map(function(item) { return Object.assign({}, item); });
 
-  // Fetch this store's Paystack subaccount code for the split
   var activeStore    = getActiveStore();
   var subaccountCode = await getStoreSubaccountCode(activeStore);
 
-  // Store grandTotal (items + surcharge) so receipts reflect what was paid
   _paystackPayload = {
-    purchaseId:    purchaseId,
-    cartSnapshot:  cartSnapshot,
+    purchaseId,
+    cartSnapshot,
     total:         grandTotal,
-    serviceCharge: serviceCharge,
+    serviceCharge,
     cartSubtotal:  cartTotal
   };
 
-  // Build Paystack config
   var paystackConfig = {
     key:      PAYSTACK_PUBLIC_KEY,
     email:    userEmail,
-    amount:   Math.round(grandTotal * 100),   // customer pays cartTotal + surcharge
+    amount:   Math.round(grandTotal * 100),
     currency: 'NGN',
     ref:      paystackRef,
     metadata: {
       custom_fields: [
-        { display_name: 'Purchase ID',     variable_name: 'purchase_id',     value: purchaseId },
-        { display_name: 'Store',           variable_name: 'store_id',        value: activeStore },
-        { display_name: 'Service Charge',  variable_name: 'service_charge',  value: '₦' + serviceCharge }
+        { display_name: 'Purchase ID',    variable_name: 'purchase_id',    value: purchaseId },
+        { display_name: 'Store',          variable_name: 'store_id',       value: activeStore },
+        { display_name: 'Service Charge', variable_name: 'service_charge', value: '₦' + serviceCharge }
       ]
     },
     callback: window._paystackCallback,
@@ -851,9 +675,6 @@ window.proceedToPayment = async function() {
   };
 
   if (subaccountCode) {
-    // Surcharge (in kobo) settles to the primary linked Paystack account
-    // Store subaccount receives the cart subtotal
-    // bearer: 'account' — primary account bears Paystack's own transaction fee
     paystackConfig.subaccount         = subaccountCode;
     paystackConfig.transaction_charge = Math.round(serviceCharge * 100);
     paystackConfig.bearer             = 'account';
@@ -862,6 +683,143 @@ window.proceedToPayment = async function() {
   var handler = PaystackPop.setup(paystackConfig);
   handler.openIframe();
 }
+
+// ── Wallet payment ────────────────────────────────────────────────────────────
+
+/**
+ * Pay for the current cart using the customer's wallet balance.
+ * No service charge is applied to wallet payments.
+ * The server (wallet-pay.js function) atomically deducts the balance
+ * and creates the purchase record. The client then deducts stock and
+ * shows the QR modal, mirroring the Paystack callback flow.
+ */
+window.payWithWallet = async function() {
+  if (cart.length === 0) {
+    notify.warning("Your cart is empty!");
+    return;
+  }
+
+  const uid   = window.currentUser?.uid;
+  const email = window.currentUser?.email;
+  if (!uid) {
+    notify.error("You must be logged in to pay with your wallet.");
+    return;
+  }
+
+  const cartTotal = calculateTotal();
+  const balance   = window.walletBalance || 0;
+
+  if (balance < cartTotal) {
+    const shortfall = cartTotal - balance;
+    const topupMsg  = `You need ₦${shortfall.toLocaleString('en-NG', { minimumFractionDigits: 2 })} more.`;
+    notify.warning(`Insufficient wallet balance. ${topupMsg}`);
+    return;
+  }
+
+  // Load profile for receipt (same as Paystack flow)
+  _profileName  = '';
+  _profilePhone = '';
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (snap.exists()) {
+      const u   = snap.data();
+      _profileName  = u.fullName || ((u.firstName || '') + ' ' + (u.lastName || '')).trim();
+      _profilePhone = u.phone || '';
+    }
+  } catch(e) { console.warn('Could not load profile for wallet receipt:', e.message); }
+
+  const purchaseId   = generatePurchaseId();
+  const cartSnapshot = cart.map(item => ({ ...item }));
+  const activeStore  = getActiveStore();
+
+  // Disable wallet pay button while processing
+  const walletBtn = document.querySelector('.btn-wallet-pay');
+  if (walletBtn) { walletBtn.disabled = true; walletBtn.textContent = 'Processing…'; }
+
+  try {
+    const res = await fetch('/api/wallet-pay', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        uid,
+        storeId:       activeStore,
+        purchaseId,
+        items:         cartSnapshot.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+        total:         cartTotal,   // no service charge for wallet payments
+        email:         email   || '',
+        customerName:  _profileName  || '',
+        customerPhone: _profilePhone || ''
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) {
+      const msg = data.error === 'Insufficient wallet balance'
+        ? 'Your wallet balance has changed. Please refresh and try again.'
+        : (data.error || 'Payment failed. Please try again.');
+      notify.error(msg, 7000);
+      if (walletBtn) { walletBtn.disabled = false; walletBtn.textContent = 'Pay with Wallet'; }
+      return;
+    }
+
+    // Update cached balance
+    window.walletBalance = data.newBalance;
+    // Update any balance displays on the page
+    document.querySelectorAll('[data-wallet-balance]').forEach(el => {
+      el.textContent = '₦' + data.newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+    });
+    const navBal = document.getElementById('wallet-nav-balance');
+    if (navBal) navBal.textContent = '₦' + data.newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+
+    // Deduct product stock (same as Paystack callback)
+    const products = getProducts();
+    for (const item of cartSnapshot) {
+      const product = products[item.productIndex];
+      if (product) {
+        product.stock -= item.quantity;
+        if (product.id && typeof window.updateProductInFirestore === 'function') {
+          window.updateProductInFirestore(product.id, {
+            name: product.name, price: product.price,
+            stock: product.stock, img: product.img
+          });
+        }
+      }
+    }
+    localStorage.setItem(`myProducts_${activeStore}`, JSON.stringify(products));
+    window.products = products;
+
+    // Clear reservations
+    deleteAllFirestoreReservations();
+    Object.keys(reservedStock).forEach(k => delete reservedStock[k]);
+
+    // Reload product cards
+    if (typeof window.loadProducts === 'function') {
+      window.loadProducts().then(updated => {
+        window.products = updated;
+        if (typeof window.renderCardsCustomer === 'function') window.renderCardsCustomer();
+      }).catch(e => console.error('Error reloading products:', e));
+    }
+
+    // Show QR modal (no service charge on wallet payments)
+    showQRCodeModal(purchaseId, cartSnapshot, cartTotal, 0, cartTotal);
+
+    // Clear cart
+    cart = [];
+    updateCartDisplay();
+    const cartPopup = document.getElementById('cart-popup');
+    if (cartPopup) cartPopup.classList.remove('active');
+
+    notify.success('Payment successful!', 4000);
+
+  } catch (err) {
+    console.error('Wallet pay error:', err);
+    notify.error('Payment failed. Please check your connection and try again.', 7000);
+    if (walletBtn) { walletBtn.disabled = false; walletBtn.textContent = 'Pay with Wallet'; }
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function calculateTotal() {
   return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -877,7 +835,6 @@ window.changeCartQty = function(cartIndex, delta) {
   if (newQty < 1) { window.removeFromCart(cartIndex); return; }
   if (newQty > maxStock) { notify.warning(`Only ${maxStock} available.`); return; }
   item.quantity = newQty;
-  // Update reserved stock display and Firestore reservation
   const productIndex = product ? products.indexOf(product) : -1;
   if (productIndex !== -1) {
     reservedStock[productIndex] = (reservedStock[productIndex] || 0) + delta;
@@ -891,11 +848,11 @@ window.changeCartQty = function(cartIndex, delta) {
 
 function updateCartDisplay() {
   window._cart = cart;
-  const cartCount = document.getElementById('cart-count');
-  const cartItems = document.getElementById('cart-items');
-  const cartTotal = document.getElementById('cart-total');
+  const cartCount   = document.getElementById('cart-count');
+  const cartItems   = document.getElementById('cart-items');
+  const cartTotal   = document.getElementById('cart-total');
   const cartTrigger = document.querySelector('.cart-trigger');
-  const payBtn = document.querySelector('.btn-pay');
+  const payBtn      = document.querySelector('.btn-pay');
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   if (cartCount) {
@@ -915,9 +872,7 @@ function updateCartDisplay() {
   if (cartItems) {
     if (cart.length === 0) {
       cartItems.innerHTML = '<p style="text-align:center; padding: 20px;">Your cart is empty.</p>';
-      if (cartTotal) {
-        cartTotal.innerHTML = "₦0.00";
-      }
+      if (cartTotal) cartTotal.innerHTML = "₦0.00";
       return;
     } else {
       cartItems.innerHTML = cart.map((item, index) => {
@@ -945,13 +900,41 @@ function updateCartDisplay() {
   }
 
   if (cartTotal) {
-    const charge = cart.length > 0 ? getServiceCharge(grandTotal) : 0;
+    const charge       = cart.length > 0 ? getServiceCharge(grandTotal) : 0;
     const displayTotal = grandTotal + charge;
     cartTotal.innerHTML = charge > 0
       ? `<span style="font-size:13px;color:var(--muted);display:block;margin-bottom:2px;">Subtotal: ₦${grandTotal.toFixed(2)}</span>` +
         `<span style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">Service charge: ₦${charge.toFixed(2)}</span>` +
         `₦${displayTotal.toFixed(2)}`
       : `₦${grandTotal.toFixed(2)}`;
+  }
+
+  // ── Wallet pay row ────────────────────────────────────────────────────────
+  // Show Pay with Wallet option when the cart has items
+  const cartFooter = document.querySelector('.cart-footer');
+  if (cartFooter && cart.length > 0) {
+    // Remove existing wallet row so it doesn't duplicate
+    const existing = cartFooter.querySelector('.wallet-pay-row');
+    if (existing) existing.remove();
+
+    const balance      = window.walletBalance || 0;
+    const cartSubtotal = calculateTotal();      // wallet pays subtotal only (no service charge)
+    const hasFunds     = balance >= cartSubtotal;
+
+    const walletRow = document.createElement('div');
+    walletRow.className = 'wallet-pay-row';
+    walletRow.innerHTML = `
+      <p class="wallet-pay-balance">
+        Wallet: ₦${balance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+        ${hasFunds ? '— <strong style="color:#16a34a;">sufficient</strong>' : ''}
+      </p>
+      <button class="btn-wallet-pay" onclick="payWithWallet()" ${hasFunds ? '' : 'disabled'}>
+        ${hasFunds ? '◎ Pay with Wallet (₦' + cartSubtotal.toLocaleString('en-NG', { minimumFractionDigits: 2 }) + ')' : '◎ Insufficient balance'}
+      </button>`;
+    cartFooter.appendChild(walletRow);
+  } else if (cartFooter) {
+    const existing = cartFooter.querySelector('.wallet-pay-row');
+    if (existing) existing.remove();
   }
 }
 

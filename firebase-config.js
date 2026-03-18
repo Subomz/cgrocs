@@ -30,6 +30,12 @@ export const headAdminConfig = {
     appId:             "1:737992865407:web:0d68c9979e8392f0bfb14a"
 };
 
+// ── Paystack ──────────────────────────────────────────────────────────────────
+// The PUBLIC key is safe to expose in client-side code.
+// The SECRET key (sk_live_...) must ONLY ever live in Cloudflare environment
+// variables (PAYSTACK_SECRET_KEY) — never committed to source control.
+export const PAYSTACK_PUBLIC_KEY = 'pk_live_e0c9caffa250105c691eb5a76f63adac7b07ca34';
+
 //  Store helpers 
 // All Firestore data is namespaced under /stores/{storeId}/ so the two stores
 // share the same Firebase projects while keeping their data fully separated.
