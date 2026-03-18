@@ -732,11 +732,20 @@ window.payWithWallet = async function() {
   const cartSnapshot = cart.map(item => ({ ...item }));
   const activeStore  = getActiveStore();
 
-  // Disable wallet pay button while processing
+  // Require PIN before processing wallet payment
   const walletBtn = document.querySelector('.btn-wallet-pay');
-  if (walletBtn) { walletBtn.disabled = true; walletBtn.textContent = 'Processing…'; }
+  if (walletBtn) { walletBtn.disabled = true; walletBtn.textContent = 'Verifying…'; }
+
+  // Use _requirePin from wallet.js (exposed via window if PIN is set)
+  const _doPinGate = (typeof window._requireWalletPin === 'function')
+    ? window._requireWalletPin
+    : function(uid, cb) { cb(null); }; // fallback: no PIN set yet, proceed
+
+  _doPinGate(uid, async function(pinToken) {
+    if (pinToken === undefined) pinToken = null; // no PIN set on account
 
   try {
+    if (walletBtn) walletBtn.textContent = 'Processing…';
     const res = await fetch('/api/wallet-pay', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -745,10 +754,11 @@ window.payWithWallet = async function() {
         storeId:       activeStore,
         purchaseId,
         items:         cartSnapshot.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
-        total:         cartTotal,   // no service charge for wallet payments
+        total:         cartTotal,
         email:         email   || '',
         customerName:  _profileName  || '',
-        customerPhone: _profilePhone || ''
+        customerPhone: _profilePhone || '',
+        pinToken:      pinToken
       })
     });
 
@@ -817,6 +827,8 @@ window.payWithWallet = async function() {
     notify.error('Payment failed. Please check your connection and try again.', 7000);
     if (walletBtn) { walletBtn.disabled = false; walletBtn.textContent = 'Pay with Wallet'; }
   }
+
+  }); // end _doPinGate
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

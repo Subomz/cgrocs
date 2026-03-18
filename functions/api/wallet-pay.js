@@ -31,6 +31,7 @@ import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
   fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId
 } from '../_wallet-firebase.js';
+import { verifyPinToken } from '../_wallet-pin.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -45,7 +46,7 @@ export async function onRequestPost({ request, env }) {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS });
     }
 
-    const { uid, storeId, purchaseId, items, total, email, customerName, customerPhone } = body;
+    const { uid, storeId, purchaseId, items, total, email, customerName, customerPhone, pinToken } = body;
 
     // ── Validate inputs ──────────────────────────────────────────────────────
     if (!uid || typeof uid !== 'string') {
@@ -62,6 +63,18 @@ export async function onRequestPost({ request, env }) {
     }
     if (typeof total !== 'number' || total <= 0 || !isFinite(total)) {
       return Response.json({ error: 'Invalid total' }, { status: 400, headers: CORS });
+    }
+
+    // ── PIN token validation ─────────────────────────────────────────────────
+    if (!pinToken || typeof pinToken !== 'string') {
+      return Response.json({ error: 'PIN verification required', requirePin: true }, { status: 401, headers: CORS });
+    }
+    if (!env.WALLET_PIN_SECRET) {
+      return Response.json({ error: 'Server configuration error' }, { status: 500, headers: CORS });
+    }
+    const pinValid = await verifyPinToken(uid, pinToken, env.WALLET_PIN_SECRET);
+    if (!pinValid) {
+      return Response.json({ error: 'PIN session expired. Please verify your PIN again.', requirePin: true }, { status: 401, headers: CORS });
     }
 
     // ── Firebase setup ───────────────────────────────────────────────────────

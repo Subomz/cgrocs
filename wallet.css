@@ -434,3 +434,58 @@
   .wallet-preset-grid { grid-template-columns: repeat(2, 1fr); }
   .wallet-balance-amount { font-size: 26px; }
 }
+
+/* ── PIN number pad ──────────────────────────────────────────── */
+.wallet-pin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.wallet-pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background: white;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.wallet-pin-dot.filled {
+  background: #0a0a0a;
+  border-color: #0a0a0a;
+  transform: scale(1.1);
+}
+
+.wallet-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+.wallet-numpad-key {
+  background: #f4f4f5;
+  border: none;
+  border-radius: 10px;
+  height: 56px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, transform 0.08s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wallet-numpad-key:hover  { background: #e4e4e7; }
+.wallet-numpad-key:active { background: #d1d5db; transform: scale(0.95); }
+.wallet-numpad-key:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── PIN setup section ───────────────────────────────────────── */
+#wallet-section-setpin {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+

@@ -246,7 +246,7 @@ tbody tr:last-child td{border-bottom:none;}
 
 <div class="header">
   <div><div class="brand-name">CGrocs</div><div class="brand-store">${escapeHtml(storeLabel)}</div></div>
-  <div class="receipt-label">Payment Receipt<div class="receipt-date">${dateStr}</div></div>
+  <div class="receipt-label">Purchase Receipt<div class="receipt-date">${dateStr}</div></div>
 </div>
 
 <div class="info-block">
