@@ -192,44 +192,54 @@ export function openTopupModal(uid, userEmail, paystackKey, onSuccess) {
     // Unique reference for this top-up
     const ref = 'wt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
 
+    // IMPORTANT: Paystack inline.js validates callbacks with `instanceof Function`.
+    // That check fails for functions defined inside an ES module because the module
+    // runs in a separate JavaScript realm. Assigning to window globals puts them in
+    // the same scope Paystack expects — identical fix to what cart.js uses.
+    window._walletTopupCallback = async function(response) {
+      notify.info('Verifying payment…', 15000);
+      try {
+        const res  = await fetch('/api/verify-wallet-topup', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ reference: response.reference, uid, amount })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          window.walletBalance = data.newBalance;
+          _updateAllBalanceDisplays(data.newBalance);
+          notify.success(fmt(amount) + ' added to your wallet!', 5000);
+          if (typeof onSuccess === 'function') onSuccess(data.newBalance);
+        } else {
+          notify.error('Top-up failed: ' + (data.error || 'Unknown error.'), 8000);
+        }
+      } catch (e) {
+        notify.error(
+          'Top-up verification failed. Contact support if you were charged.',
+          10000
+        );
+      }
+    };
+
+    window._walletTopupOnClose = function() {
+      notify.info('Top-up cancelled.');
+    };
+
     const handler = PaystackPop.setup({
       key:      paystackKey,
       email:    userEmail,
-      amount:   amount * 100, // kobo
+      amount:   amount * 100,
       currency: 'NGN',
-      ref,
+      ref:      ref,
       metadata: {
         custom_fields: [
-          { display_name: 'Purpose',    variable_name: 'purpose', value: 'Wallet Top-up' },
-          { display_name: 'Customer ID', variable_name: 'uid',    value: uid }
+          { display_name: 'Purpose',     variable_name: 'purpose', value: 'Wallet Top-up' },
+          { display_name: 'Customer ID', variable_name: 'uid',     value: uid }
         ]
       },
-      callback: async (response) => {
-        const toastId = notify.info('Verifying payment…', 15000);
-        try {
-          const res  = await fetch('/api/verify-wallet-topup', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ reference: response.reference, uid, amount })
-          });
-          const data = await res.json();
-
-          if (data.success) {
-            window.walletBalance = data.newBalance;
-            _updateAllBalanceDisplays(data.newBalance);
-            notify.success(`${fmt(amount)} added to your wallet!`, 5000);
-            if (typeof onSuccess === 'function') onSuccess(data.newBalance);
-          } else {
-            notify.error('Top-up failed: ' + (data.error || 'Unknown error.'), 8000);
-          }
-        } catch {
-          notify.error(
-            'Top-up verification failed. Contact support if you were charged.',
-            10000
-          );
-        }
-      },
-      onClose: () => notify.info('Top-up cancelled.')
+      callback: window._walletTopupCallback,
+      onClose:  window._walletTopupOnClose
     });
 
     handler.openIframe();

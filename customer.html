@@ -49,7 +49,7 @@
             <button class="wallet-nav-badge" id="wallet-nav-btn" style="display:none;"
                     onclick="window.openWalletTopup()" title="Top up wallet">
                 <span class="wallet-nav-icon">&#9675;</span>
-                <span id="wallet-nav-balance" data-wallet-balance>&#8358;0.00</span>
+                <span id="wallet-nav-balance" data-wallet-balance>₦0.00</span>
             </button>
 
             <div class="cart-trigger" onclick="toggleCart()">
@@ -211,11 +211,11 @@
             const balance = await loadWalletBalance(user.uid);
             const navBtn  = document.getElementById('wallet-nav-btn');
             const navBal  = document.getElementById('wallet-nav-balance');
-            if (navBal) navBal.textContent  = '&#8358;' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+            if (navBal) navBal.textContent  = '₦' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
             if (navBtn) navBtn.style.display = 'flex';
 
             setWalletContext(user.uid, user.email, PAYSTACK_PUBLIC_KEY, (newBalance) => {
-                if (navBal) navBal.textContent = '&#8358;' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+                if (navBal) navBal.textContent = '₦' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
                 document.dispatchEvent(new Event('wallet-updated'));
             });
             document.addEventListener('wallet-updated', () => {
