@@ -27,6 +27,47 @@ const db = getFirestore(app);
 // Cached balance — read by cart.js
 window.walletBalance = 0;
 
+// ── Paystack callbacks — defined at MODULE TOP LEVEL ─────────────────────────
+// Paystack's inline.js validates callbacks with `instanceof Function`.
+// That check fails for any function created inside a module's execution realm,
+// even if later assigned to window. The ONLY fix is to define them here at the
+// top level so they exist on window the moment the script loads.
+// Data is passed in via _walletPayload (same pattern as cart.js _paystackPayload).
+
+let _walletPayload = null; // set just before PaystackPop.setup() is called
+
+window._walletTopupCallback = function(response) {
+  const payload = _walletPayload;
+  _walletPayload = null; // consume immediately
+  if (!payload) { console.error('wallet: callback fired but no payload'); return; }
+
+  notify.info('Verifying payment…', 15000);
+  fetch('/api/verify-wallet-topup', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ reference: response.reference, uid: payload.uid, amount: payload.amount })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.success) {
+      window.walletBalance = data.newBalance;
+      _updateAllBalanceDisplays(data.newBalance);
+      notify.success('₦' + payload.amount.toLocaleString('en-NG') + ' added to your wallet!', 5000);
+      if (typeof payload.onSuccess === 'function') payload.onSuccess(data.newBalance);
+    } else {
+      notify.error('Top-up failed: ' + (data.error || 'Unknown error.'), 8000);
+    }
+  })
+  .catch(function() {
+    notify.error('Top-up verification failed. Contact support if you were charged.', 10000);
+  });
+};
+
+window._walletTopupOnClose = function() {
+  _walletPayload = null;
+  notify.info('Top-up cancelled.');
+};
+
 // ── Balance ───────────────────────────────────────────────────────────────────
 
 /** Load the customer's wallet balance from Firestore and cache it. */
@@ -189,42 +230,9 @@ export function openTopupModal(uid, userEmail, paystackKey, onSuccess) {
 
     closeModal();
 
-    // Unique reference for this top-up
+    // Store payload so the top-level window callbacks can read it
     const ref = 'wt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-
-    // IMPORTANT: Paystack inline.js validates callbacks with `instanceof Function`.
-    // That check fails for functions defined inside an ES module because the module
-    // runs in a separate JavaScript realm. Assigning to window globals puts them in
-    // the same scope Paystack expects — identical fix to what cart.js uses.
-    window._walletTopupCallback = async function(response) {
-      notify.info('Verifying payment…', 15000);
-      try {
-        const res  = await fetch('/api/verify-wallet-topup', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ reference: response.reference, uid, amount })
-        });
-        const data = await res.json();
-
-        if (data.success) {
-          window.walletBalance = data.newBalance;
-          _updateAllBalanceDisplays(data.newBalance);
-          notify.success(fmt(amount) + ' added to your wallet!', 5000);
-          if (typeof onSuccess === 'function') onSuccess(data.newBalance);
-        } else {
-          notify.error('Top-up failed: ' + (data.error || 'Unknown error.'), 8000);
-        }
-      } catch (e) {
-        notify.error(
-          'Top-up verification failed. Contact support if you were charged.',
-          10000
-        );
-      }
-    };
-
-    window._walletTopupOnClose = function() {
-      notify.info('Top-up cancelled.');
-    };
+    _walletPayload = { uid: uid, amount: amount, onSuccess: onSuccess };
 
     const handler = PaystackPop.setup({
       key:      paystackKey,
