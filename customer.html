@@ -47,7 +47,7 @@
 
             <!-- Wallet balance badge (shown after auth) -->
             <button class="wallet-nav-badge" id="wallet-nav-btn" style="display:none;"
-                    onclick="window.openWalletTopup()" title="Top up wallet">
+                    onclick="window.openWalletPanel()" title="Open wallet">
                 <span class="wallet-nav-icon">&#9675;</span>
                 <span id="wallet-nav-balance" data-wallet-balance>₦0.00</span>
             </button>
@@ -211,11 +211,23 @@
             const balance = await loadWalletBalance(user.uid);
             const navBtn  = document.getElementById('wallet-nav-btn');
             const navBal  = document.getElementById('wallet-nav-balance');
-            if (navBal) navBal.textContent  = '₦' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+            if (navBal) navBal.textContent = '₦' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
             if (navBtn) navBtn.style.display = 'flex';
+
+            // Sync withdrawal available balance display
+            var wdBal = document.getElementById('wd-available-balance');
+            if (wdBal) wdBal.textContent = '₦' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+            // Sync panel balance display
+            var panelBal = document.getElementById('wallet-panel-balance');
+            if (panelBal) panelBal.textContent = '₦' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
             setWalletContext(user.uid, user.email, PAYSTACK_PUBLIC_KEY, (newBalance) => {
                 if (navBal) navBal.textContent = '₦' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+                // Sync panel balance display and withdrawal available
+                var panelBalEl = document.getElementById('wallet-panel-balance');
+                if (panelBalEl) panelBalEl.textContent = '₦' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+                var wdBalEl = document.getElementById('wd-available-balance');
+                if (wdBalEl) wdBalEl.textContent = '₦' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
                 document.dispatchEvent(new Event('wallet-updated'));
             });
             document.addEventListener('wallet-updated', () => {
@@ -223,6 +235,135 @@
             });
         });
     </script>
+
+
+    <!-- Wallet Panel (same pattern as Orders panel) -->
+    <div id="wallet-overlay" onclick="window.closeWalletPanel()"></div>
+    <div id="wallet-panel">
+
+        <!-- Header -->
+        <div class="wallet-panel-header">
+            <div>
+                <h2 class="wallet-panel-title">My Wallet</h2>
+                <p class="wallet-panel-sub" id="wallet-panel-sub">Manage your balance</p>
+            </div>
+            <button onclick="window.closeWalletPanel()" class="wallet-panel-close">&#215;</button>
+        </div>
+
+        <!-- MAIN SECTION: balance card + transaction list -->
+        <div class="wallet-section" id="wallet-section-main" style="display:flex;">
+
+            <!-- Balance card -->
+            <div class="wallet-balance-card">
+                <div class="wallet-balance-label">Available Balance</div>
+                <div class="wallet-balance-amount" id="wallet-panel-balance">&#8358;0.00</div>
+                <div class="wallet-action-row">
+                    <button class="wallet-action-btn wallet-action-topup" onclick="window._walletShowTopup()">
+                        <span class="btn-icon">&#43;</span>
+                        <span>Top Up</span>
+                    </button>
+                    <button class="wallet-action-btn wallet-action-withdraw" onclick="window._walletShowWithdraw()">
+                        <span class="btn-icon">&#8593;</span>
+                        <span>Withdraw</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transaction history -->
+            <div class="wallet-txn-section">
+                <div class="wallet-txn-heading">Transaction History</div>
+                <div id="wallet-panel-txns">
+                    <p class="wallet-empty">Loading&#8230;</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP-UP SECTION -->
+        <div class="wallet-section" id="wallet-section-topup" style="display:none;">
+            <div class="wallet-back-row">
+                <button class="wallet-back-btn" onclick="window._walletShowMain()">&#8592; Back</button>
+                <h3 class="wallet-section-title">Top Up Wallet</h3>
+            </div>
+            <div class="wallet-form-body">
+                <p style="font-size:13px;color:#6b7280;margin:0;">Funds are added to your wallet instantly.</p>
+
+                <!-- Preset amounts -->
+                <div>
+                    <div class="wallet-field" style="margin-bottom:8px;">
+                        <label>Quick Select</label>
+                    </div>
+                    <div class="wallet-preset-grid">
+                        <button class="amount-preset" data-v="500"  onclick="window._walletSelectPreset(this)">&#8358;500</button>
+                        <button class="amount-preset" data-v="1000" onclick="window._walletSelectPreset(this)">&#8358;1,000</button>
+                        <button class="amount-preset" data-v="2000" onclick="window._walletSelectPreset(this)">&#8358;2,000</button>
+                        <button class="amount-preset" data-v="5000" onclick="window._walletSelectPreset(this)">&#8358;5,000</button>
+                    </div>
+                </div>
+
+                <!-- Custom amount -->
+                <div class="wallet-field">
+                    <label for="wt-custom-amount">Or enter custom amount</label>
+                    <div class="wallet-input-wrap">
+                        <span class="wallet-input-prefix">&#8358;</span>
+                        <input type="number" id="wt-custom-amount" placeholder="0"
+                               min="100" step="50"
+                               oninput="window._walletClearPresets()">
+                    </div>
+                    <span class="wallet-hint">Minimum: &#8358;100</span>
+                </div>
+
+                <button class="wallet-submit-btn" onclick="window._walletDoTopup()">
+                    Continue to Payment
+                </button>
+            </div>
+        </div>
+
+        <!-- WITHDRAWAL SECTION -->
+        <div class="wallet-section" id="wallet-section-withdraw" style="display:none;">
+            <div class="wallet-back-row">
+                <button class="wallet-back-btn" onclick="window._walletShowMain()">&#8592; Back</button>
+                <h3 class="wallet-section-title">Withdraw Funds</h3>
+            </div>
+            <div class="wallet-form-body">
+                <p style="font-size:13px;color:#6b7280;margin:0;">
+                    Funds will be sent to your bank account within a few minutes.
+                </p>
+
+                <div class="wallet-field">
+                    <label for="wd-account-number">Account Number</label>
+                    <input type="text" id="wd-account-number" placeholder="10-digit account number"
+                           maxlength="10" inputmode="numeric"
+                           oninput="window._walletResolveAccount()"
+                           style="border:1.5px solid #e4e4e7;border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;width:100%;transition:border-color .18s;"
+                           onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
+                </div>
+
+                <div class="wallet-field">
+                    <label for="wd-bank-select">Bank</label>
+                    <select id="wd-bank-select" onchange="window._walletResolveAccount()">
+                        <option value="">— Select your bank —</option>
+                    </select>
+                </div>
+
+                <!-- Verified account name -->
+                <div class="wallet-account-name" id="wd-account-name"></div>
+
+                <div class="wallet-field">
+                    <label for="wd-amount">Amount to Withdraw</label>
+                    <div class="wallet-input-wrap">
+                        <span class="wallet-input-prefix">&#8358;</span>
+                        <input type="number" id="wd-amount" placeholder="0" min="100">
+                    </div>
+                    <span class="wallet-hint">Minimum: &#8358;100 &nbsp;&bull;&nbsp; Available: <span id="wd-available-balance">&#8358;0.00</span></span>
+                </div>
+
+                <button class="wallet-submit-btn" id="wd-submit-btn" onclick="window._walletDoWithdraw()">
+                    Withdraw Funds
+                </button>
+            </div>
+        </div>
+
+    </div>
 
     <!-- My Orders Panel -->
     <div id="orders-overlay" class="orders-overlay" onclick="window.closeOrdersPopup()"></div>
