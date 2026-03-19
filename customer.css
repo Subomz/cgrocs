@@ -484,44 +484,43 @@ button:disabled {
 }
 
 @media (max-width: 600px) {
+  /* Nav wraps: logo+buttons on row 1, search on row 2 */
   .customer-nav {
-    flex-wrap: nowrap; padding: 0 12px !important;
-    height: 56px; gap: 8px; position: relative;
+    flex-wrap: wrap;
+    padding: 0 12px !important;
+    height: auto;
+    gap: 0;
+    position: sticky;
   }
-  .customer-nav .navlogo { flex-shrink: 0; }
-  #customer-store-label { display: none; }
-  #nav-search-wrap { display: none; } /* hidden on mobile — search moves below */
-  .customer-nav .account { margin-left: auto; gap: 6px; }
+
+  /* Row 1: logo left, account right, 56px tall */
+  .customer-nav .navlogo  { flex-shrink: 0; height: 56px; display: flex; align-items: center; }
+  .customer-nav .account  { margin-left: auto; gap: 6px; height: 56px; display: flex; align-items: center; }
+  #customer-store-label   { display: none; }
 
   /* Hide desktop-only nav buttons on mobile */
   .nav-desktop { display: none !important; }
 
-  /* Cart stays visible always */
-  .cart-trigger { padding: 6px 12px; font-size: 13px; }
+  /* Row 2: search bar fills full width */
+  #nav-search-wrap {
+    order: 3;
+    width: 100%;
+    flex-basis: 100%;
+    max-width: 100%;
+    margin: 0 -12px;          /* bleed to nav edges */
+    width: calc(100% + 24px);
+    border-radius: 0;
+    height: 42px;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.10);
+    padding: 0 14px;
+  }
 
   #shop-controls { padding: 0 12px; margin-top: 12px; }
   .product-grid  { padding: 12px 12px 40px; }
   .qr-modal-content { width: 95%; }
   .qr-body { padding: 20px; }
-}
-
-/* Mobile search bar — shown as its own row below nav on small screens */
-@media (max-width: 600px) {
-  #nav-search-wrap {
-    display: flex !important;
-    position: sticky;
-    top: 56px;
-    z-index: 9998;
-    width: 100%;
-    max-width: 100%;
-    margin: 0;
-    border-radius: 0;
-    background: rgba(30,30,30,0.97);
-    border: none;
-    border-bottom: 1px solid rgba(255,255,255,0.10);
-    padding: 0 16px;
-    height: 44px;
-  }
 }
 
 @media (max-width: 860px) {
@@ -684,10 +683,9 @@ button:disabled {
 .nav-dropdown {
   display: none; /* only shown on mobile */
   position: fixed;
-  top: 56px; /* below the 56px nav */
+  top: 98px; /* below nav row (56px) + search row (42px) */
   left: 0; right: 0;
   z-index: 9997;
-  /* sits below the search bar row */
 }
 .nav-dropdown.open { display: block; }
 
@@ -740,8 +738,4 @@ button:disabled {
 }
 
 
-/* Shift search bar down when dropdown is open to avoid it overlapping */
-@media (max-width: 600px) {
-  .nav-dropdown.open ~ * #nav-search-wrap,
-  .nav-dropdown.open + #nav-search-wrap { top: 100px; }
-}
+

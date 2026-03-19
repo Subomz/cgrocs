@@ -16,15 +16,13 @@
       function setNavH() {
         const nav = document.querySelector('nav');
         if (!nav) return;
+        // Search bar is inside the nav (second row on mobile), so
+        // nav.offsetHeight already includes it.
         const navH = nav.offsetHeight;
-        // On mobile, search bar is sticky below the nav — include it in total nav height
-        const searchWrap = document.getElementById('nav-search-wrap');
-        const searchH = (window.innerWidth <= 600 && searchWrap)
-          ? (searchWrap.offsetHeight || 44) : 0;
-        document.documentElement.style.setProperty('--nav-h', (navH + searchH) + 'px');
-        // Also update dropdown top to sit below nav + search bar
+        document.documentElement.style.setProperty('--nav-h', navH + 'px');
+        // Keep dropdown aligned to bottom of nav
         const dropdown = document.getElementById('nav-dropdown');
-        if (dropdown) dropdown.style.top = (navH + searchH) + 'px';
+        if (dropdown) dropdown.style.top = navH + 'px';
       }
       window.addEventListener('load',   setNavH);
       window.addEventListener('resize', setNavH);
@@ -62,15 +60,16 @@
                 <span id="wallet-nav-balance" data-wallet-balance>₦0.00</span>
             </button>
 
-            <!-- Cart always visible -->
-            <div class="cart-trigger" onclick="toggleCart()">
+            <!-- Cart — desktop only -->
+            <div class="cart-trigger nav-desktop" onclick="toggleCart()">
                 Cart <span id="cart-count" class="empty">0</span>
             </div>
 
             <button class="orders-btn nav-desktop" id="orders-btn" onclick="window.openOrdersPopup()" title="My Orders">
                 <span class="orders-btn-label">Orders</span>
             </button>
-            <button class="logout-button nav-desktop" type="button" onclick="window.checkLogout()">Logout</button>
+            <!-- Logout always visible (mobile + desktop) -->
+            <button class="logout-button" type="button" onclick="window.checkLogout()">Logout</button>
 
             <!-- Hamburger — mobile only -->
             <button class="nav-hamburger" id="nav-hamburger" onclick="window.toggleNavMenu()" aria-label="Menu" aria-expanded="false">
