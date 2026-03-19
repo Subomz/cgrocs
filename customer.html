@@ -15,7 +15,16 @@
     <script>
       function setNavH() {
         const nav = document.querySelector('nav');
-        if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
+        if (!nav) return;
+        const navH = nav.offsetHeight;
+        // On mobile, search bar is sticky below the nav — include it in total nav height
+        const searchWrap = document.getElementById('nav-search-wrap');
+        const searchH = (window.innerWidth <= 600 && searchWrap)
+          ? (searchWrap.offsetHeight || 44) : 0;
+        document.documentElement.style.setProperty('--nav-h', (navH + searchH) + 'px');
+        // Also update dropdown top to sit below nav + search bar
+        const dropdown = document.getElementById('nav-dropdown');
+        if (dropdown) dropdown.style.top = (navH + searchH) + 'px';
       }
       window.addEventListener('load',   setNavH);
       window.addEventListener('resize', setNavH);
@@ -43,22 +52,54 @@
         </div>
 
         <div class="account">
-            <button class="switch-store-btn" onclick="window.openStorePicker()" title="Switch Store">Switch Store</button>
+            <!-- Desktop-only buttons (hidden on mobile) -->
+            <button class="switch-store-btn nav-desktop" onclick="window.openStorePicker()" title="Switch Store">Switch Store</button>
 
             <!-- Wallet balance badge (shown after auth) -->
-            <button class="wallet-nav-badge" id="wallet-nav-btn" style="display:none;"
+            <button class="wallet-nav-badge nav-desktop" id="wallet-nav-btn" style="display:none;"
                     onclick="window.openWalletPanel()" title="Open wallet">
                 <span class="wallet-nav-icon">&#9675;</span>
                 <span id="wallet-nav-balance" data-wallet-balance>₦0.00</span>
             </button>
 
+            <!-- Cart always visible -->
             <div class="cart-trigger" onclick="toggleCart()">
                 Cart <span id="cart-count" class="empty">0</span>
             </div>
-            <button class="orders-btn" id="orders-btn" onclick="window.openOrdersPopup()" title="My Orders">
+
+            <button class="orders-btn nav-desktop" id="orders-btn" onclick="window.openOrdersPopup()" title="My Orders">
                 <span class="orders-btn-label">Orders</span>
             </button>
-            <button class="logout-button" type="button" onclick="window.checkLogout()">Logout</button>
+            <button class="logout-button nav-desktop" type="button" onclick="window.checkLogout()">Logout</button>
+
+            <!-- Hamburger — mobile only -->
+            <button class="nav-hamburger" id="nav-hamburger" onclick="window.toggleNavMenu()" aria-label="Menu" aria-expanded="false">
+                <span class="ham-line"></span>
+                <span class="ham-line"></span>
+                <span class="ham-line"></span>
+            </button>
+        </div>
+
+        <!-- Mobile dropdown menu -->
+        <div class="nav-dropdown" id="nav-dropdown" aria-hidden="true">
+            <div class="nav-dropdown-inner">
+                <button class="nav-drop-item" onclick="window.openStorePicker(); window.closeNavMenu();">
+                    <span class="drop-icon">&#9673;</span> Switch Store
+                </button>
+                <button class="nav-drop-item" id="nav-drop-wallet" style="display:none;"
+                        onclick="window.openWalletPanel(); window.closeNavMenu();">
+                    <span class="drop-icon">&#9675;</span>
+                    Wallet &mdash; <span id="wallet-nav-balance-mob" data-wallet-balance>₦0.00</span>
+                </button>
+                <button class="nav-drop-item" onclick="window.openOrdersPopup(); window.closeNavMenu();">
+                    <span class="drop-icon">&#128722;</span> My Orders
+                </button>
+                <div class="nav-drop-divider"></div>
+                <button class="nav-drop-item" onclick="toggleCart(); window.closeNavMenu();">
+                    <span class="drop-icon">&#128722;</span>
+                    Cart <span id="nav-drop-cart-count" style="background:rgba(255,255,255,0.15);border-radius:20px;padding:1px 8px;font-size:12px;margin-left:4px;">0</span>
+                </button>
+            </div>
         </div>
     </nav>
 
@@ -213,6 +254,11 @@
             const navBal  = document.getElementById('wallet-nav-balance');
             if (navBal) navBal.textContent = '₦' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
             if (navBtn) navBtn.style.display = 'flex';
+            // Also show mobile wallet item and sync balance
+            var navDropWallet = document.getElementById('nav-drop-wallet');
+            var navBalMob = document.getElementById('wallet-nav-balance-mob');
+            if (navDropWallet) navDropWallet.style.display = '';
+            if (navBalMob) navBalMob.textContent = '₦' + balance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
             // Sync withdrawal available balance display
             var wdBal = document.getElementById('wd-available-balance');
@@ -228,6 +274,8 @@
                 if (panelBalEl) panelBalEl.textContent = '₦' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
                 var wdBalEl = document.getElementById('wd-available-balance');
                 if (wdBalEl) wdBalEl.textContent = '₦' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
+                var mobBal = document.getElementById('wallet-nav-balance-mob');
+                if (mobBal) mobBal.textContent = '₦' + newBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 });
                 document.dispatchEvent(new Event('wallet-updated'));
             });
             document.addEventListener('wallet-updated', () => {
@@ -703,6 +751,57 @@ tbody tr:last-child td{border-bottom:none;}
 </table>
 <div class="footer">Thank you for shopping at CGrocs &middot; ${storeLabel}<br>Keep this receipt until your order is collected</div>
 <script>window.onload=function(){window.print();}<\/script>
+
+    <script>
+        // ── Hamburger nav menu ────────────────────────────────────────────────
+        window.toggleNavMenu = function() {
+            var dropdown = document.getElementById('nav-dropdown');
+            var hamburger = document.getElementById('nav-hamburger');
+            if (!dropdown) return;
+            var isOpen = dropdown.classList.toggle('open');
+            hamburger.classList.toggle('open', isOpen);
+            hamburger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            dropdown.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            if (isOpen) {
+                // Close when clicking outside
+                setTimeout(function() {
+                    document.addEventListener('click', _closeNavOnOutside, { once: true });
+                }, 10);
+            }
+        };
+
+        window.closeNavMenu = function() {
+            var dropdown = document.getElementById('nav-dropdown');
+            var hamburger = document.getElementById('nav-hamburger');
+            if (!dropdown) return;
+            dropdown.classList.remove('open');
+            if (hamburger) { hamburger.classList.remove('open'); hamburger.setAttribute('aria-expanded', 'false'); }
+            dropdown.setAttribute('aria-hidden', 'true');
+        };
+
+        function _closeNavOnOutside(e) {
+            var dropdown = document.getElementById('nav-dropdown');
+            var hamburger = document.getElementById('nav-hamburger');
+            if (dropdown && !dropdown.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                window.closeNavMenu();
+            }
+        }
+
+        // Sync mobile dropdown cart count with main cart-count badge
+        var _cartCountEl = document.getElementById('cart-count');
+        if (_cartCountEl) {
+            var _obs = new MutationObserver(function() {
+                var dropCount = document.getElementById('nav-drop-cart-count');
+                if (dropCount) dropCount.textContent = _cartCountEl.textContent || '0';
+            });
+            _obs.observe(_cartCountEl, { childList: true, characterData: true, subtree: true });
+        }
+
+        // Close menu on window resize past mobile breakpoint
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 600) window.closeNavMenu();
+        });
+    </script>
 </body></html>`;
 
             const win = window.open('', '_blank', 'width=700,height=900');

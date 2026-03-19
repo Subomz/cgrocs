@@ -485,23 +485,43 @@ button:disabled {
 
 @media (max-width: 600px) {
   .customer-nav {
-    flex-wrap: wrap; padding: 8px 12px !important;
-    height: auto; gap: 8px;
+    flex-wrap: nowrap; padding: 0 12px !important;
+    height: 56px; gap: 8px; position: relative;
   }
   .customer-nav .navlogo { flex-shrink: 0; }
-  .customer-nav .account { flex-shrink: 0; margin-left: auto; gap: 6px; }
   #customer-store-label { display: none; }
-  #nav-search-wrap {
-    order: 3; max-width: 100%; width: 100%; margin: 0; flex-basis: 100%;
-  }
-  #shop-controls { padding: 0 12px; margin-top: 16px; }
-  .product-grid  { padding: 16px 12px; }
+  #nav-search-wrap { display: none; } /* hidden on mobile — search moves below */
+  .customer-nav .account { margin-left: auto; gap: 6px; }
+
+  /* Hide desktop-only nav buttons on mobile */
+  .nav-desktop { display: none !important; }
+
+  /* Cart stays visible always */
+  .cart-trigger { padding: 6px 12px; font-size: 13px; }
+
+  #shop-controls { padding: 0 12px; margin-top: 12px; }
+  .product-grid  { padding: 12px 12px 40px; }
   .qr-modal-content { width: 95%; }
   .qr-body { padding: 20px; }
-  .orders-btn-label { display: none; }
-  .cart-trigger  { padding: 6px 10px; font-size: 13px; }
-  .orders-btn    { padding: 6px 10px; font-size: 13px; }
-  .logout-button { padding: 6px 10px; font-size: 13px; }
+}
+
+/* Mobile search bar — shown as its own row below nav on small screens */
+@media (max-width: 600px) {
+  #nav-search-wrap {
+    display: flex !important;
+    position: sticky;
+    top: 56px;
+    z-index: 9998;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    border-radius: 0;
+    background: rgba(30,30,30,0.97);
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+    padding: 0 16px;
+    height: 44px;
+  }
 }
 
 @media (max-width: 860px) {
@@ -623,4 +643,105 @@ button:disabled {
 .orders-empty-msg {
   text-align: center; padding: 30px;
   color: var(--muted); font-size: 14px;
+}
+
+/* ── Hamburger button — mobile only ──────────────────────────────────────── */
+.nav-hamburger {
+  display: none; /* shown only on mobile via media query */
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.18);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.nav-hamburger:hover { background: rgba(255,255,255,0.20); }
+
+.ham-line {
+  display: block;
+  width: 18px; height: 2px;
+  background: rgba(255,255,255,0.90);
+  border-radius: 2px;
+  transition: transform 0.25s, opacity 0.2s, width 0.2s;
+  transform-origin: center;
+}
+/* Animate to X when open */
+.nav-hamburger.open .ham-line:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav-hamburger.open .ham-line:nth-child(2) { opacity: 0; width: 0; }
+.nav-hamburger.open .ham-line:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+@media (max-width: 600px) {
+  .nav-hamburger { display: flex; }
+}
+
+/* ── Nav dropdown — mobile only ───────────────────────────────────────────── */
+.nav-dropdown {
+  display: none; /* only shown on mobile */
+  position: fixed;
+  top: 56px; /* below the 56px nav */
+  left: 0; right: 0;
+  z-index: 9997;
+  /* sits below the search bar row */
+}
+.nav-dropdown.open { display: block; }
+
+.nav-dropdown-inner {
+  background: #111;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  padding: 8px 0 12px;
+  animation: dropIn 0.22s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+}
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.nav-drop-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 20px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.88);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-drop-item:hover,
+.nav-drop-item:active {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+.drop-icon {
+  font-size: 16px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.nav-drop-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.10);
+  margin: 6px 16px;
+}
+
+
+/* Shift search bar down when dropdown is open to avoid it overlapping */
+@media (max-width: 600px) {
+  .nav-dropdown.open ~ * #nav-search-wrap,
+  .nav-dropdown.open + #nav-search-wrap { top: 100px; }
 }
