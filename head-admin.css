@@ -485,3 +485,19 @@ body {
   overflow-y: auto !important;
   align-items: flex-start !important;
 }
+
+/* ── Password show/hide toggle ── */
+.password-input-wrap {
+  position: relative;
+}
+.password-input-wrap input {
+  padding-right: 58px;
+}
+.show-password-btn {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; padding: 2px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); cursor: pointer;
+  transition: color 0.2s; line-height: 0;
+}
+.show-password-btn:hover { color: var(--black); }
