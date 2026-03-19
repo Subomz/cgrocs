@@ -752,6 +752,17 @@ tbody tr:last-child td{border-bottom:none;}
 <div class="footer">Thank you for shopping at CGrocs &middot; ${storeLabel}<br>Keep this receipt until your order is collected</div>
 <script>window.onload=function(){window.print();}<\/script>
 
+</body></html>`;
+
+            const win = window.open('', '_blank', 'width=700,height=900');
+            if (!win) { notify.error('Please allow pop-ups to download the receipt.'); return; }
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            win.onload = () => win.print();
+            setTimeout(() => { try { win.print(); } catch(e){} }, 600);
+        }
+    </script>
     <script>
         // ── Hamburger nav menu ────────────────────────────────────────────────
         window.toggleNavMenu = function() {
@@ -801,17 +812,6 @@ tbody tr:last-child td{border-bottom:none;}
         window.addEventListener('resize', function() {
             if (window.innerWidth > 600) window.closeNavMenu();
         });
-    </script>
-</body></html>`;
-
-            const win = window.open('', '_blank', 'width=700,height=900');
-            if (!win) { notify.error('Please allow pop-ups to download the receipt.'); return; }
-            win.document.write(html);
-            win.document.close();
-            win.focus();
-            win.onload = () => win.print();
-            setTimeout(() => { try { win.print(); } catch(e){} }, 600);
-        }
     </script>
 </body>
 </html>
