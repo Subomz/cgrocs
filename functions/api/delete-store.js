@@ -1,11 +1,26 @@
 // functions/api/delete-store.js
-import { getAccessToken, fsGet, fsSet, fsDelete, fsList, fromDoc, toFields } from '../_firebase-rest.js';
+import {
+  getAccessToken, fsGet, fsSet, fsDelete, fsList, fromDoc, toFields,
+  verifyCallerIsHeadAdmin, extractBearerToken
+} from '../_firebase-rest.js';
 
-const CUSTOMER_PROJECT   = 'cloexlogin-d466a';
-const ADMIN_PROJECT      = 'cloexadminlogin';
-const HEAD_ADMIN_PROJECT = 'cloex-managerpage';
+const CUSTOMER_PROJECT      = 'cloexlogin-d466a';
+const ADMIN_PROJECT         = 'cloexadminlogin';
+const HEAD_ADMIN_PROJECT    = 'cloex-managerpage';
+const HEAD_ADMIN_WEB_API_KEY_ENV = 'FIREBASE_HEAD_ADMIN_WEB_API_KEY';
 
 const BATCH_SIZE = 100;
+
+// storeId must be lowercase alphanumeric + hyphens only, max 40 chars.
+// This prevents path-traversal attacks like storeId = "../users" which could
+// delete data from unrelated Firestore collections.
+const VALID_STORE_ID = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$|^[a-z0-9]$/;
+
+const CORS = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
 
 async function deleteCollection(projectId, collectionPath, token) {
   let deleted = 0;
@@ -13,9 +28,8 @@ async function deleteCollection(projectId, collectionPath, token) {
     const docs = await fsList(projectId, collectionPath, token, BATCH_SIZE);
     if (!docs.length) break;
     await Promise.all(docs.map(doc => {
-      // doc.name is the full resource path — extract just the relative part
-      const parts    = doc.name.split('/documents/');
-      const docPath  = parts[1];
+      const parts   = doc.name.split('/documents/');
+      const docPath = parts[1];
       return fsDelete(projectId, docPath, token);
     }));
     deleted += docs.length;
@@ -34,15 +48,48 @@ async function deleteStoreData(projectId, storeId, collections, token) {
 }
 
 export async function onRequestPost(context) {
-  const { env } = context;
+  const { request, env } = context;
 
   if (!env.FIREBASE_CUSTOMER_SERVICE_ACCOUNT || !env.FIREBASE_ADMIN_SERVICE_ACCOUNT || !env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT) {
-    return Response.json({ error: 'One or more Firebase service account env vars are not configured.' }, { status: 500 });
+    return Response.json(
+      { error: 'One or more Firebase service account env vars are not configured.' },
+      { status: 500, headers: CORS }
+    );
   }
 
-  const { storeId } = await context.request.json();
-  if (!storeId || typeof storeId !== 'string' || !storeId.trim()) {
-    return Response.json({ error: 'storeId is required.' }, { status: 400 });
+  // ── Verify the caller is an authenticated head admin ──────────────────────
+  const idToken = extractBearerToken(request);
+  if (!idToken) {
+    return Response.json({ error: 'Authorization header required.' }, { status: 401, headers: CORS });
+  }
+  if (!env[HEAD_ADMIN_WEB_API_KEY_ENV]) {
+    return Response.json({ error: 'Server configuration error.' }, { status: 500, headers: CORS });
+  }
+  const callerUid = await verifyCallerIsHeadAdmin(idToken, env[HEAD_ADMIN_WEB_API_KEY_ENV]);
+  if (!callerUid) {
+    return Response.json({ error: 'Unauthorized.' }, { status: 401, headers: CORS });
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body) return Response.json({ error: 'Invalid JSON body.' }, { status: 400, headers: CORS });
+
+  const { storeId } = body;
+
+  if (!storeId || typeof storeId !== 'string') {
+    return Response.json({ error: 'storeId is required.' }, { status: 400, headers: CORS });
+  }
+
+  // Strict validation: only allow safe store IDs to prevent path traversal
+  if (!VALID_STORE_ID.test(storeId)) {
+    return Response.json(
+      { error: 'Invalid storeId format. Use only lowercase letters, numbers, and hyphens.' },
+      { status: 400, headers: CORS }
+    );
+  }
+
+  // Reject any storeId that looks like a traversal attempt (extra safety)
+  if (storeId.includes('..') || storeId.includes('/') || storeId.includes('\\')) {
+    return Response.json({ error: 'Invalid storeId.' }, { status: 400, headers: CORS });
   }
 
   const log = {};
@@ -51,7 +98,11 @@ export async function onRequestPost(context) {
     // 1. Customer project
     const customerSa    = JSON.parse(env.FIREBASE_CUSTOMER_SERVICE_ACCOUNT);
     const customerToken = await getAccessToken(customerSa);
-    log.customer = await deleteStoreData(CUSTOMER_PROJECT, storeId, ['products', 'purchases', 'categories', 'reservations'], customerToken);
+    log.customer = await deleteStoreData(
+      CUSTOMER_PROJECT, storeId,
+      ['products', 'purchases', 'categories', 'reservations'],
+      customerToken
+    );
 
     // 2. Admin project
     const adminSa    = JSON.parse(env.FIREBASE_ADMIN_SERVICE_ACCOUNT);
@@ -88,11 +139,15 @@ export async function onRequestPost(context) {
       log.storeConfig = 'not found';
     }
 
-    console.log(`[delete-store] ${storeId} deleted:`, log);
-    return Response.json({ success: true, storeId, log });
+    console.log(`[delete-store] ${storeId} deleted by ${callerUid}:`, log);
+    return Response.json({ success: true, storeId, log }, { headers: CORS });
 
   } catch (e) {
     console.error('[delete-store] Error:', e);
-    return Response.json({ error: e.message || 'Unexpected error.', log }, { status: 500 });
+    return Response.json({ error: e.message || 'Unexpected error.', log }, { status: 500, headers: CORS });
   }
+}
+
+export async function onRequestOptions() {
+  return new Response(null, { status: 204, headers: CORS });
 }

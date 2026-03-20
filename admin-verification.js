@@ -212,7 +212,7 @@ window.printReceipt = async function(purchaseId) {
 
   const chargeRows = charge > 0 ? `
     <tr style="border-top:1px solid #e4e4e7;"><td colspan="3" style="text-align:right;color:#6b7280;">Subtotal</td><td style="text-align:right;color:#6b7280;">\u20a6${subTotal.toFixed(2)}</td></tr>
-    <tr><td colspan="3" style="text-align:right;color:#6b7280;">Service Charge</td><td style="text-align:right;color:#6b7280;">\u20a6${charge.toFixed(2)}</td></tr>` : '';
+    <tr><td colspan="3" style="text-align:right;color:#6b7280;">Convenience Fee</td><td style="text-align:right;color:#6b7280;">\u20a6${charge.toFixed(2)}</td></tr>` : '';
 
   const verifiedRows = purchase.verified ? `
     <div class="info-row"><span class="info-label">Verified At</span><span class="info-value">${new Date(purchase.verifiedDate).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>

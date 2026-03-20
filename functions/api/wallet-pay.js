@@ -2,6 +2,8 @@
 //  CGrocs — functions/api/wallet-pay.js
 //  POST /api/wallet-pay
 //
+//  Headers: Authorization: Bearer <firebase_customer_id_token>
+//
 //  Body: {
 //    uid:           string,
 //    storeId:       string,
@@ -10,33 +12,44 @@
 //    total:         number  (naira — goods only, no service charge),
 //    email:         string,
 //    customerName:  string,
-//    customerPhone: string
+//    customerPhone: string,
+//    pinToken:      string | null
 //  }
 //
-//  Atomically inside a single Firestore transaction:
-//    1. Reads the user's walletBalance
-//    2. Rejects if balance < total
-//    3. Deducts the total from walletBalance
-//    4. Creates the purchase document in stores/{storeId}/purchases/{purchaseId}
-//    5. Writes a walletTransactions debit entry
+//  Security: The caller's Firebase ID token is verified server-side and
+//  must match the uid in the body. This prevents one user from paying
+//  from another user's wallet.
 //
-//  The client is responsible for deducting product stock after a successful
-//  response (mirrors the existing Paystack callback behaviour in cart.js).
+//  PIN logic:
+//    - If the user has a PIN set (walletPinSet === true), a valid pinToken
+//      is required. The client obtains this from /api/wallet-verify-pin.
+//    - If the user has NOT set a PIN, pinToken may be null and payment
+//      proceeds without a PIN check.
+//
+//  Atomically inside a single Firestore transaction:
+//    1. Verifies the caller's Firebase ID token
+//    2. Reads the user document (balance + PIN status)
+//    3. Enforces PIN requirement if set
+//    4. Rejects if balance < total
+//    5. Deducts walletBalance
+//    6. Creates the purchase document
+//    7. Writes a walletTransactions debit entry
 //
 //  Returns: { success: true, newBalance: number, purchaseId: string }
-//       or: { error: string, balance?: number }
+//       or: { error: string, requirePin?: true, balance?: number }
 // ============================================================
 
 import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
-  fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId
+  fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId,
+  verifyCustomerIdToken
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
 export async function onRequestPost({ request, env }) {
@@ -65,16 +78,37 @@ export async function onRequestPost({ request, env }) {
       return Response.json({ error: 'Invalid total' }, { status: 400, headers: CORS });
     }
 
-    // ── PIN token validation ─────────────────────────────────────────────────
-    if (!pinToken || typeof pinToken !== 'string') {
-      return Response.json({ error: 'PIN verification required', requirePin: true }, { status: 401, headers: CORS });
+    // ── Verify the caller's Firebase ID token ────────────────────────────────
+    // Ensures the request comes from the authenticated user whose uid is in
+    // the body — prevents one user from draining another user's wallet.
+    const idToken = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+    if (!idToken) {
+      return Response.json({ error: 'Authorization header required' }, { status: 401, headers: CORS });
     }
-    if (!env.WALLET_PIN_SECRET) {
+    if (!env.FIREBASE_CUSTOMER_WEB_API_KEY) {
       return Response.json({ error: 'Server configuration error' }, { status: 500, headers: CORS });
     }
-    const pinValid = await verifyPinToken(uid, pinToken, env.WALLET_PIN_SECRET);
-    if (!pinValid) {
-      return Response.json({ error: 'PIN session expired. Please verify your PIN again.', requirePin: true }, { status: 401, headers: CORS });
+    const callerVerified = await verifyCustomerIdToken(idToken, uid, env.FIREBASE_CUSTOMER_WEB_API_KEY);
+    if (!callerVerified) {
+      return Response.json({ error: 'Invalid or expired session. Please log in again.' }, { status: 401, headers: CORS });
+    }
+
+    // ── Validate pinToken if provided ────────────────────────────────────────
+    // If the client sent a pinToken, validate it up-front before any Firestore
+    // work. If no pinToken is provided, we check inside the transaction whether
+    // the user has a PIN set (and reject if they do).
+    let pinTokenValid = false;
+    if (pinToken && typeof pinToken === 'string') {
+      if (!env.WALLET_PIN_SECRET) {
+        return Response.json({ error: 'Server configuration error' }, { status: 500, headers: CORS });
+      }
+      pinTokenValid = await verifyPinToken(uid, pinToken, env.WALLET_PIN_SECRET);
+      if (!pinTokenValid) {
+        return Response.json(
+          { error: 'PIN session expired. Please verify your PIN again.', requirePin: true },
+          { status: 401, headers: CORS }
+        );
+      }
     }
 
     // ── Firebase setup ───────────────────────────────────────────────────────
@@ -88,10 +122,19 @@ export async function onRequestPost({ request, env }) {
     let newBalance;
 
     try {
-      // Read wallet balance inside transaction (prevents concurrent deductions)
+      // Read wallet balance and PIN status inside transaction
       const userDoc  = await fsGetInTx(token, projectId, `users/${uid}`, tx);
       const userData = userDoc ? fromFsFields(userDoc.fields) : {};
       const before   = typeof userData.walletBalance === 'number' ? userData.walletBalance : 0;
+
+      // If the user has a PIN set but no valid pinToken was provided, reject
+      if (userData.walletPinSet === true && !pinTokenValid) {
+        await fsRollback(token, projectId, tx);
+        return Response.json(
+          { error: 'PIN verification required', requirePin: true },
+          { status: 401, headers: CORS }
+        );
+      }
 
       if (before < total) {
         await fsRollback(token, projectId, tx);
@@ -107,9 +150,9 @@ export async function onRequestPost({ request, env }) {
 
       // Sanitise items to only store the fields we need
       const safeItems = items.map(i => ({
-        name:     String(i.name     || ''),
-        quantity: Number(i.quantity || 0),
-        price:    Number(i.price    || 0)
+        name:     String(i.name     || '').slice(0, 200),
+        quantity: Math.max(0, Math.round(Number(i.quantity) || 0)),
+        price:    Math.max(0, Number(i.price) || 0)
       }));
 
       await fsCommit(token, projectId, tx, [
@@ -130,15 +173,15 @@ export async function onRequestPost({ request, env }) {
               id:            purchaseId,
               items:         safeItems,
               total,
-              cartSubtotal:  total,   // no service charge on wallet payments
-              serviceCharge: 0,
+              cartSubtotal:  total,   // no convenience fee on wallet payments
+              serviceCharge: 0,   // kept as 0; field name preserved for DB compatibility
               date:          now,
               verified:      false,
               storeId,
               uid,
-              email:         email         || '',
-              customerName:  customerName  || '',
-              customerPhone: customerPhone || '',
+              email:         String(email         || '').slice(0, 254),
+              customerName:  String(customerName  || '').slice(0, 200),
+              customerPhone: String(customerPhone || '').slice(0, 30),
               paymentMethod: 'wallet',
               reference:     'wallet-' + purchaseId
             })

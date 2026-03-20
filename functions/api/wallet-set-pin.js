@@ -2,23 +2,25 @@
 //  CGrocs — functions/api/wallet-set-pin.js
 //  POST /api/wallet-set-pin
 //
+//  Headers: Authorization: Bearer <firebase_customer_id_token>
+//
 //  Body: { uid: string, pin: string (4 digits) }
 //
-//  Hashes the PIN with PBKDF2 and stores it in Firestore at
-//  users/{uid}.walletPin  (server-only write).
-//  Also sets users/{uid}.walletPinSet = true.
+//  Verifies the caller's Firebase ID token matches uid before
+//  accepting the PIN. Hashes the PIN with PBKDF2 and stores it
+//  in Firestore at users/{uid}.walletPin / walletPinSet.
 //
 //  Returns: { success: true }
 //       or: { error: string }
 // ============================================================
 
 import { hashPin } from '../_wallet-pin.js';
-import { getAccessToken, fsBase, toFsFields } from '../_wallet-firebase.js';
+import { getAccessToken, fsBase, toFsFields, verifyCustomerIdToken } from '../_wallet-firebase.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
 export async function onRequestPost({ request, env }) {
@@ -33,28 +35,41 @@ export async function onRequestPost({ request, env }) {
     if (!pin || !/^\d{4}$/.test(String(pin)))
       return Response.json({ error: 'PIN must be exactly 4 digits' }, { status: 400, headers: CORS });
 
+    // ── Verify the caller's Firebase ID token ────────────────────────────────
+    const idToken = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+    if (!idToken) {
+      return Response.json({ error: 'Authorization header required' }, { status: 401, headers: CORS });
+    }
+    if (!env.FIREBASE_CUSTOMER_WEB_API_KEY) {
+      return Response.json({ error: 'Server configuration error' }, { status: 500, headers: CORS });
+    }
+    const callerVerified = await verifyCustomerIdToken(idToken, uid, env.FIREBASE_CUSTOMER_WEB_API_KEY);
+    if (!callerVerified) {
+      return Response.json({ error: 'Invalid or expired session. Please log in again.' }, { status: 401, headers: CORS });
+    }
+
     const sa        = JSON.parse(env.FIREBASE_CUSTOMER_SERVICE_ACCOUNT);
     const token     = await getAccessToken(sa);
     const projectId = sa.project_id;
     const base      = fsBase(projectId);
 
-    // Hash the PIN
+    // Hash the PIN with PBKDF2-SHA256
     const { hash, salt } = await hashPin(pin);
 
-    // Store in Firestore — field mask so we only touch PIN fields
-    const res = await fetch(`${base}/users/${uid}?updateMask.fieldPaths=walletPin&updateMask.fieldPaths=walletPinSet`, {
-      method:  'PATCH',
-      headers: {
-        Authorization:  `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        fields: toFsFields({
-          walletPin:    { hash, salt },
-          walletPinSet: true
+    // Store in Firestore — field mask so we only touch PIN fields, never walletBalance
+    const res = await fetch(
+      `${base}/users/${uid}?updateMask.fieldPaths=walletPin&updateMask.fieldPaths=walletPinSet`,
+      {
+        method:  'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: toFsFields({
+            walletPin:    { hash, salt },
+            walletPinSet: true
+          })
         })
-      })
-    });
+      }
+    );
 
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);

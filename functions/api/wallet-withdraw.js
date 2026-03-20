@@ -2,43 +2,51 @@
 //  CGrocs — functions/api/wallet-withdraw.js
 //  POST /api/wallet-withdraw
 //
+//  Headers: Authorization: Bearer <firebase_customer_id_token>
+//
 //  Body: {
 //    uid:            string,
 //    amount:         number  (naira),
 //    accountNumber:  string,
 //    bankCode:       string,
 //    accountName:    string  (pre-verified by client)
+//    pinToken:       string
 //  }
 //
+//  Security: Firebase ID token verified before any action.
+//
+//  Double-spend fix: The balance is deducted in Firestore BEFORE the
+//  Paystack transfer is initiated. If Paystack fails, the balance is
+//  atomically refunded in a second Firestore transaction. This prevents
+//  two concurrent requests from both reading the same balance and both
+//  initiating separate transfers.
+//
 //  Flow:
-//    1. Validate inputs
-//    2. Read wallet balance in a Firestore transaction
-//    3. Reject if insufficient
-//    4. Create a Paystack transfer recipient
-//    5. Initiate the Paystack transfer
-//    6. On Paystack acceptance:
-//         • Deduct walletBalance in Firestore
-//         • Write a walletTransactions debit entry
+//    1. Verify Firebase ID token matches uid
+//    2. Verify PIN token
+//    3. Read balance in Firestore transaction
+//    4. Reject if insufficient
+//    5. COMMIT Firestore deduction + pending log entry
+//    6. Create Paystack transfer recipient
+//    7. Initiate Paystack transfer
+//    8a. On Paystack success: update log entry to completed
+//    8b. On Paystack failure: REFUND balance in a new Firestore transaction
 //
 //  Returns: { success: true, newBalance: number, transferCode: string }
 //       or: { error: string, balance?: number }
-//
-//  NOTE: Paystack transfers require your Paystack account to have
-//  transfers enabled and your balance to be funded. The transfer
-//  is initiated instantly but settlement to the recipient's bank
-//  typically takes a few minutes.
 // ============================================================
 
 import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
-  fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId
+  fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId,
+  verifyCustomerIdToken, fsGet
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
 export async function onRequestPost({ request, env }) {
@@ -53,14 +61,27 @@ export async function onRequestPost({ request, env }) {
       return Response.json({ error: 'Missing uid' }, { status: 400, headers: CORS });
     if (typeof amount !== 'number' || amount < 100 || !isFinite(amount))
       return Response.json({ error: 'Minimum withdrawal is ₦100' }, { status: 400, headers: CORS });
-    if (!accountNumber || !/^\d{10}$/.test(accountNumber))
-      return Response.json({ error: 'Invalid account number' }, { status: 400, headers: CORS });
-    if (!bankCode || typeof bankCode !== 'string')
-      return Response.json({ error: 'Missing bank code' }, { status: 400, headers: CORS });
-    if (!accountName || typeof accountName !== 'string')
+    if (!accountNumber || !/^\d{10}$/.test(String(accountNumber)))
+      return Response.json({ error: 'Invalid account number — must be exactly 10 digits' }, { status: 400, headers: CORS });
+    if (!bankCode || typeof bankCode !== 'string' || !/^\d{2,9}$/.test(bankCode))
+      return Response.json({ error: 'Invalid bank code' }, { status: 400, headers: CORS });
+    if (!accountName || typeof accountName !== 'string' || accountName.trim().length < 2)
       return Response.json({ error: 'Missing account name' }, { status: 400, headers: CORS });
 
     const amountKobo = Math.round(amount * 100);
+
+    // ── Verify Firebase ID token ─────────────────────────────────────────────
+    const idToken = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+    if (!idToken) {
+      return Response.json({ error: 'Authorization header required' }, { status: 401, headers: CORS });
+    }
+    if (!env.FIREBASE_CUSTOMER_WEB_API_KEY) {
+      return Response.json({ error: 'Server configuration error' }, { status: 500, headers: CORS });
+    }
+    const callerVerified = await verifyCustomerIdToken(idToken, uid, env.FIREBASE_CUSTOMER_WEB_API_KEY);
+    if (!callerVerified) {
+      return Response.json({ error: 'Invalid or expired session. Please log in again.' }, { status: 401, headers: CORS });
+    }
 
     // ── PIN token validation ─────────────────────────────────────────────────
     if (!pinToken || typeof pinToken !== 'string') {
@@ -71,7 +92,10 @@ export async function onRequestPost({ request, env }) {
     }
     const pinValid = await verifyPinToken(uid, pinToken, env.WALLET_PIN_SECRET);
     if (!pinValid) {
-      return Response.json({ error: 'PIN session expired. Please verify your PIN again.', requirePin: true }, { status: 401, headers: CORS });
+      return Response.json(
+        { error: 'PIN session expired. Please verify your PIN again.', requirePin: true },
+        { status: 401, headers: CORS }
+      );
     }
 
     // ── Firebase setup ────────────────────────────────────────────────────────
@@ -80,14 +104,20 @@ export async function onRequestPost({ request, env }) {
     const projectId = sa.project_id;
     const base      = fsBase(projectId);
 
-    // ── Check wallet balance in Firestore transaction ─────────────────────────
-    const tx       = await fsBeginTransaction(token, projectId);
+    // ── STEP 1: Deduct balance in Firestore BEFORE calling Paystack ───────────
+    // This prevents two concurrent requests from both passing the balance check
+    // and initiating duplicate transfers. If Paystack fails we refund below.
+    const tx = await fsBeginTransaction(token, projectId);
     let newBalance;
+    let before;
+    const txLogId    = randomId();
+    const reference  = 'wdraw-' + uid.slice(0, 6) + '-' + Date.now();
+    const now        = new Date().toISOString();
 
     try {
       const userDoc  = await fsGetInTx(token, projectId, `users/${uid}`, tx);
       const userData = userDoc ? fromFsFields(userDoc.fields) : {};
-      const before   = typeof userData.walletBalance === 'number' ? userData.walletBalance : 0;
+      before         = typeof userData.walletBalance === 'number' ? userData.walletBalance : 0;
 
       if (before < amount) {
         await fsRollback(token, projectId, tx);
@@ -97,7 +127,49 @@ export async function onRequestPost({ request, env }) {
         );
       }
 
-      // ── Create Paystack transfer recipient ──────────────────────────────────
+      newBalance = before - amount;
+
+      // Commit the deduction + a "pending" log entry now, before any Paystack calls.
+      await fsCommit(token, projectId, tx, [
+        {
+          update: {
+            name:   `${base}/users/${uid}`,
+            fields: toFsFields({ walletBalance: newBalance })
+          },
+          updateMask: { fieldPaths: ['walletBalance'] }
+        },
+        {
+          update: {
+            name:   `${base}/users/${uid}/walletTransactions/${txLogId}`,
+            fields: toFsFields({
+              type:          'debit',
+              amount,
+              reference,
+              status:        'pending',
+              description:   `Withdrawal to ${String(accountName).slice(0, 100)} (${accountNumber})`,
+              date:          now,
+              balanceBefore: before,
+              balanceAfter:  newBalance,
+              withdrawalDetails: {
+                accountNumber,
+                accountName: String(accountName).slice(0, 100),
+                bankCode,
+                transferCode: ''
+              }
+            })
+          }
+        }
+      ]);
+    } catch (txErr) {
+      await fsRollback(token, projectId, tx);
+      throw txErr;
+    }
+
+    // ── STEP 2: Call Paystack (balance already deducted) ─────────────────────
+    let transferCode = reference;
+
+    try {
+      // Create transfer recipient
       const recipientRes = await fetch('https://api.paystack.co/transferrecipient', {
         method:  'POST',
         headers: {
@@ -106,7 +178,7 @@ export async function onRequestPost({ request, env }) {
         },
         body: JSON.stringify({
           type:           'nuban',
-          name:           accountName,
+          name:           String(accountName).slice(0, 100),
           account_number: accountNumber,
           bank_code:      bankCode,
           currency:       'NGN'
@@ -115,18 +187,13 @@ export async function onRequestPost({ request, env }) {
       const recipientData = await recipientRes.json();
 
       if (!recipientData.status || !recipientData.data?.recipient_code) {
-        await fsRollback(token, projectId, tx);
-        return Response.json(
-          { error: 'Could not create transfer recipient. Check account details.' },
-          { status: 400, headers: CORS }
-        );
+        throw new Error('Could not create transfer recipient. Check account details.');
       }
 
       const recipientCode = recipientData.data.recipient_code;
 
-      // ── Initiate Paystack transfer ──────────────────────────────────────────
-      const reference    = 'wdraw-' + uid.slice(0, 6) + '-' + Date.now();
-      const transferRes  = await fetch('https://api.paystack.co/transfer', {
+      // Initiate transfer
+      const transferRes = await fetch('https://api.paystack.co/transfer', {
         method:  'POST',
         headers: {
           Authorization:  `Bearer ${env.PAYSTACK_SECRET_KEY}`,
@@ -142,54 +209,54 @@ export async function onRequestPost({ request, env }) {
       });
       const transferData = await transferRes.json();
 
-      // Paystack returns status=true for pending/success transfers
       if (!transferData.status) {
-        await fsRollback(token, projectId, tx);
-        const psMsg = transferData.message || 'Transfer initiation failed.';
-        return Response.json({ error: psMsg }, { status: 400, headers: CORS });
+        throw new Error(transferData.message || 'Transfer initiation failed.');
       }
 
-      const transferCode = transferData.data?.transfer_code || reference;
-      newBalance         = before - amount;
-      const now          = new Date().toISOString();
-      const txLogId      = randomId();
+      transferCode = transferData.data?.transfer_code || reference;
 
-      // ── Commit: deduct balance + log ────────────────────────────────────────
-      await fsCommit(token, projectId, tx, [
-        {
-          update: {
-            name:   `${base}/users/${uid}`,
-            fields: toFsFields({ walletBalance: newBalance })
-          },
-          updateMask: { fieldPaths: ['walletBalance'] }
-        },
-        {
-          update: {
-            name:   `${base}/users/${uid}/walletTransactions/${txLogId}`,
-            fields: toFsFields({
-              type:          'debit',
-              amount,
-              reference:     transferCode,
-              description:   `Withdrawal to ${accountName} (${accountNumber})`,
-              date:          now,
-              balanceBefore: before,
-              balanceAfter:  newBalance,
-              withdrawalDetails: {
-                accountNumber,
-                accountName,
-                bankCode,
-                transferCode
-              }
-            })
-          }
-        }
-      ]);
+      // Update log to completed (best-effort — do not fail the response if this write fails)
+      await _updateWithdrawalLog(token, projectId, base, uid, txLogId, 'completed', transferCode).catch(e => {
+        console.warn('[wallet-withdraw] Could not update log to completed:', e.message);
+      });
 
       return Response.json({ success: true, newBalance, transferCode }, { headers: CORS });
 
-    } catch (txErr) {
-      await fsRollback(token, projectId, tx);
-      throw txErr;
+    } catch (paystackErr) {
+      // ── STEP 3: Paystack failed — refund the balance ──────────────────────
+      console.error('[wallet-withdraw] Paystack error, refunding balance:', paystackErr.message);
+
+      try {
+        const refundTx = await fsBeginTransaction(token, projectId);
+        const freshDoc = await fsGetInTx(token, projectId, `users/${uid}`, refundTx);
+        const freshBalance = freshDoc
+          ? (fromFsFields(freshDoc.fields).walletBalance || newBalance)
+          : newBalance;
+
+        await fsCommit(token, projectId, refundTx, [
+          {
+            update: {
+              name:   `${base}/users/${uid}`,
+              fields: toFsFields({ walletBalance: freshBalance + amount })
+            },
+            updateMask: { fieldPaths: ['walletBalance'] }
+          }
+        ]);
+      } catch (refundErr) {
+        // Critical: balance was deducted but refund failed. Log for manual resolution.
+        console.error(
+          'CRITICAL [wallet-withdraw] Refund failed. Manual action required.',
+          { uid, amount, reference, refundError: refundErr.message }
+        );
+      }
+
+      // Update log to failed status
+      await _updateWithdrawalLog(token, projectId, base, uid, txLogId, 'failed', reference, paystackErr.message).catch(() => {});
+
+      return Response.json(
+        { error: paystackErr.message || 'Transfer failed. Your balance has been refunded.' },
+        { status: 400, headers: CORS }
+      );
     }
 
   } catch (err) {
@@ -199,6 +266,25 @@ export async function onRequestPost({ request, env }) {
       { status: 500, headers: CORS }
     );
   }
+}
+
+/** Update the withdrawal log entry status (best-effort, no transaction needed). */
+async function _updateWithdrawalLog(token, projectId, base, uid, txLogId, status, transferCode, errorMessage) {
+  const updateTx = await fsBeginTransaction(token, projectId);
+  const fields   = { status, transferCode: transferCode || '' };
+  if (errorMessage) fields.errorMessage = String(errorMessage).slice(0, 500);
+
+  await fsCommit(token, projectId, updateTx, [
+    {
+      update: {
+        name:   `${base}/users/${uid}/walletTransactions/${txLogId}`,
+        fields: Object.fromEntries(
+          Object.entries(fields).map(([k, v]) => [k, typeof v === 'string' ? { stringValue: v } : { nullValue: null }])
+        )
+      },
+      updateMask: { fieldPaths: Object.keys(fields) }
+    }
+  ]);
 }
 
 export async function onRequestOptions() {

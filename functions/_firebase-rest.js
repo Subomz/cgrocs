@@ -54,6 +54,49 @@ export async function getAccessToken(serviceAccount) {
   return data.access_token;
 }
 
+// ── Caller authentication ─────────────────────────────────────────────────────
+//
+// Verifies a Firebase client ID token server-side using the Identity Toolkit
+// accounts:lookup endpoint. The web API key is public (already in the frontend
+// app) — add it as FIREBASE_HEAD_ADMIN_WEB_API_KEY in Cloudflare env vars.
+//
+// verifyCallerIsHeadAdmin: returns the caller's uid if the token is valid for
+// the head-admin Firebase project, or null if invalid/missing.
+//
+// All admin API endpoints (create-head-admin, delete-cashier, delete-store,
+// save-subaccount, etc.) call this before performing any destructive action.
+// Any account with a valid token in the head-admin project IS a head admin —
+// regular customers cannot obtain tokens in that project.
+
+export async function verifyCallerIsHeadAdmin(idToken, webApiKey) {
+  if (!idToken || !webApiKey) return null;
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${webApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      }
+    );
+    const data = await res.json();
+    if (data.error || !Array.isArray(data.users) || data.users.length === 0) return null;
+    return data.users[0].localId; // uid of the verified caller
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract a Bearer token from the Authorization header.
+ * Returns the token string or null.
+ */
+export function extractBearerToken(request) {
+  const auth = request.headers.get('Authorization') || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  return auth.slice(7).trim() || null;
+}
+
 // ── Firestore REST helpers ────────────────────────────────────────────────────
 
 const fsBase = (projectId) =>

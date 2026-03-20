@@ -19,10 +19,6 @@ const adminLogApp = getApps().find(a => a.name === 'admin-guard')
 const adminLogDb = getFirestore(adminLogApp);
 
 // ── Active store — always resolved live so auth guards can set it first ───────
-// Never freeze _storeId at module load. col() and docRef() call
-// resolveStoreId() fresh on every Firestore operation so that by the time
-// init() or reloadStoreProducts() runs the auth guard has already written
-// the correct storeId to sessionStorage / window.cashierStoreId.
 function resolveStoreId() {
     return window.cashierStoreId
         || sessionStorage.getItem('cashierStoreId')
@@ -79,9 +75,6 @@ async function loadProducts() {
     const loaded = [];
     snap.forEach(d => loaded.push({ id: d.id, ...d.data() }));
     if (loaded.length === 0 && !snap.metadata.fromCache) {
-      // Only seed when Firestore confirms the collection is genuinely empty.
-      // If the read came from cache (e.g. a permissions error returned nothing),
-      // we skip seeding to avoid silently overwriting a store's products.
       await initializeDefaultProducts();
       return loadProducts();
     }
@@ -147,7 +140,7 @@ async function populateCategoryDropdown(selectedValue) {
   const sel = document.getElementById('p-category'); if (!sel) return;
   const cats = await getAllCategories();
   sel.innerHTML = '<option value="">— No category —</option>' +
-    cats.map(c => `<option value="${c}"${c === selectedValue ? ' selected' : ''}>${c}</option>`).join('');
+    cats.map(c => `<option value="${escapeHtml(c)}"${c === selectedValue ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
 }
 
 //  Add/delete category modal 
@@ -175,6 +168,16 @@ window.openAddCategoryModal = function() {
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  // FIX: Use event delegation on the list container instead of inline onclick
+  // with interpolated strings — prevents XSS from category names containing
+  // special characters like quotes, angle brackets, or JS keywords.
+  const listEl = modal.querySelector('#existing-cats-list');
+  listEl.addEventListener('click', e => {
+    const btn = e.target.closest('[data-del-cat]');
+    if (btn) window.deleteCategory(btn.dataset.delCat);
+  });
+
   document.getElementById('new-cat-input').focus();
   _refreshCatList();
 };
@@ -183,10 +186,11 @@ async function _refreshCatList() {
   const el = document.getElementById('existing-cats-list'); if (!el) return;
   const cats = await getAllCategories();
   if (cats.length === 0) { el.innerHTML = '<span style="font-size:13px;color:#bbb;">None yet</span>'; return; }
+  // FIX: Use data-del-cat attribute instead of inline onclick to avoid XSS
   el.innerHTML = cats.map(c => `
     <span style="display:inline-flex;align-items:center;gap:4px;background:#f4f4f5;border-radius:20px;padding:5px 10px 5px 13px;font-size:13px;font-weight:600;color:#1a1a1a;">
-      ${c}
-      <button onclick="window.deleteCategory('${c.replace(/'/g,"\\'")}')"
+      ${escapeHtml(c)}
+      <button data-del-cat="${escapeHtml(c)}"
         style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#bbb;padding:0 2px;" title="Remove">×</button>
     </span>`).join('');
 }
@@ -295,7 +299,7 @@ function _buildAdminCategoryBar() {
   const bar = document.getElementById('admin-category-bar'); if (!bar) return;
   const cats = ['All', ...new Set(products.map(p => p.category).filter(Boolean))].sort((a,b) => a==='All'?-1:b==='All'?1:a.localeCompare(b));
   bar.innerHTML = cats.map(cat =>
-    `<button class="cat-btn${cat===_adminActiveCategory?' active':''}" data-cat="${cat}" onclick="window.selectAdminCategory(this)">${cat}</button>`
+    `<button class="cat-btn${cat===_adminActiveCategory?' active':''}" data-cat="${escapeHtml(cat)}" onclick="window.selectAdminCategory(this)">${escapeHtml(cat)}</button>`
   ).join('');
 }
 window.selectAdminCategory = function(btn) { _adminActiveCategory = btn.dataset.cat; renderCardsAdmin(); };
@@ -352,7 +356,7 @@ function _buildCategoryBar() {
   const bar = document.getElementById('category-bar'); if (!bar) return;
   const cats = ['All', ...new Set(products.map(p => p.category).filter(Boolean))].sort((a,b) => a==='All'?-1:b==='All'?1:a.localeCompare(b));
   bar.innerHTML = cats.map(cat =>
-    `<button class="cat-btn${cat===_activeCategory?' active':''}" data-cat="${cat}" onclick="window.selectCategory(this)">${cat}</button>`
+    `<button class="cat-btn${cat===_activeCategory?' active':''}" data-cat="${escapeHtml(cat)}" onclick="window.selectCategory(this)">${escapeHtml(cat)}</button>`
   ).join('');
 }
 window.selectCategory = function(btn) { _activeCategory = btn.dataset.cat; renderCardsCustomer(); };
@@ -369,20 +373,23 @@ window.clearSearch = function() {
   renderCardsCustomer();
 };
 
-//  Render: Home 
+//  FIX: renderCardsHome — escape all Firestore-sourced values before DOM injection
 function renderCardsHome() {
   const container = document.getElementById('product-container-home'); if (!container) return;
   if (!products || products.length === 0) {
     container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products available.</p>'; return;
   }
-  container.innerHTML = products.map((p,i) => `
+  container.innerHTML = products.map((p) => {
+    const safeName = escapeHtml(p.name);
+    return `
     <div class="card">
-      <img src="${p.img||'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${p.name}"
+      <img src="${p.img||'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${safeName}"
            onerror="this.src='https://placehold.co/400x300/f5f5f5/999?text=No+Image'">
-      <h4>${p.name}</h4><p>₦${p.price.toLocaleString()}</p>
+      <h4>${safeName}</h4><p>₦${p.price.toLocaleString()}</p>
       <p class="stock-label ${p.stock<=0?'out-of-stock':''}">${p.stock>0?`In Stock: ${p.stock}`:'Out of Stock'}</p>
       <button class="btn-buy" onclick="redirectToLoginPage()">Add To Cart</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 //  Product CRUD 
@@ -511,7 +518,6 @@ window.renderCardsCustomer=renderCardsCustomer;
 function renderAll(){renderCardsAdmin();renderCardsCustomer();renderCardsHome();}
 window.products=products; window.loadProducts=loadProducts;
 
-// Called by the store picker (home.html) and by admin-auth-guard after storeId is confirmed
 window.reloadStoreProducts = async function() {
   try {
     products = await loadProducts();
@@ -521,8 +527,6 @@ window.reloadStoreProducts = async function() {
   } catch(e){ console.error('reloadStoreProducts error:', e); }
 };
 
-// Auto-init only on the customer page — admin and home pages control
-// their own load timing so products are never fetched before a store is set.
 function isAdminPage() {
   const path = window.location.pathname;
   return path.includes('admin.html') || path.includes('home.html');

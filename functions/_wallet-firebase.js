@@ -58,6 +58,35 @@ export async function getAccessToken(serviceAccount) {
   return data.access_token;
 }
 
+// ── Firebase ID token verification ───────────────────────────────────────────
+//
+// Verifies a Firebase client ID token server-side by calling the Identity
+// Toolkit accounts:lookup endpoint. The web API key is public (already
+// embedded in the frontend app) — store it as FIREBASE_CUSTOMER_WEB_API_KEY
+// in Cloudflare environment variables for cleanliness.
+//
+// Returns true if the token is valid AND belongs to expectedUid.
+// Returns false on any failure (expired, tampered, wrong uid, network error).
+
+export async function verifyCustomerIdToken(idToken, expectedUid, webApiKey) {
+  if (!idToken || !expectedUid || !webApiKey) return false;
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${webApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      }
+    );
+    const data = await res.json();
+    if (data.error || !Array.isArray(data.users) || data.users.length === 0) return false;
+    return data.users[0].localId === expectedUid;
+  } catch {
+    return false;
+  }
+}
+
 // ── Firestore REST helpers ────────────────────────────────────────────────────
 
 function fsBase(projectId) {

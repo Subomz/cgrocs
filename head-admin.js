@@ -17,6 +17,30 @@ const cashierDb  = getFirestore(cashierApp);
 const custApp = getApps().find(a => a.name === 'cardstorage') || initializeApp(customerConfig, 'cardstorage');
 const custDb  = getFirestore(custApp);
 
+// ── API auth helper ───────────────────────────────────────────────────────────
+// Returns the current head admin's Firebase ID token for authenticated
+// Cloudflare Function calls. All destructive API endpoints now require this.
+async function _getHaIdToken() {
+  try {
+    return await adminAuth.currentUser?.getIdToken() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function _authedPost(url, body) {
+  const idToken = await _getHaIdToken();
+  return fetch(url, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      ...(idToken ? { 'Authorization': 'Bearer ' + idToken } : {})
+    },
+    body: JSON.stringify(body)
+  });
+}
+
+
 // ── Dynamic store map ────────────────────────────────────────────────────────
 // Loaded from Firestore (storeConfig/list) at startup. Falls back to the
 // hardcoded STORE_IDS/STORE_LABELS from firebase-config.js on first run.
@@ -511,11 +535,7 @@ window.deleteAccount = function(uid, name) {
     if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
 
     try {
-      const res  = await fetch('/api/delete-cashier', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ uid })
-      });
+      const res  = await _authedPost('/api/delete-cashier', { uid });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not delete account.');
 
@@ -589,14 +609,18 @@ window.reprintReceipt = function(purchaseId, storeId) {
   const purchase = ((_allPurchases[storeId||'store1'])||[]).find(p => p.id === purchaseId)
     || getAllPurchases().find(p => p.id === purchaseId);
   if (!purchase) { notify.error('Purchase not found.'); return; }
-  const customerName  = purchase.customerName  || purchase.email || 'Unknown';
-  const customerPhone = purchase.customerPhone || '—';
-  const customerEmail = purchase.email         || '—';
-  const cashierName   = resolveCashierName(purchase);
-  const storeInfo     = getStoreLabel(purchase._storeId) || '';
+  // FIX: escape all Firestore-sourced strings before injecting into the
+  // print window HTML — prevents XSS from malicious customer names/emails.
+  const customerName  = escapeHtml(purchase.customerName  || purchase.email || 'Unknown');
+  const customerPhone = escapeHtml(purchase.customerPhone || '—');
+  const customerEmail = escapeHtml(purchase.email         || '—');
+  const cashierName   = escapeHtml(resolveCashierName(purchase));
+  const purchaseId_s  = escapeHtml(purchase.id            || '—');
+  const reference_s   = escapeHtml(purchase.reference     || '—');
+  const storeInfo     = escapeHtml(getStoreLabel(purchase._storeId) || '');
 
   const printWindow = window.open('', '', 'width=800,height=700');
-  printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${purchase.id}</title>
+  printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${purchaseId_s}</title>
     <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:28px;max-width:620px;margin:0 auto}
     .rh{text-align:center;border-bottom:2px solid #111;padding-bottom:18px;margin-bottom:20px}
     .rh h1{font-size:28px;font-weight:900}.rh h2{font-size:15px;color:#555;margin-top:4px}
@@ -617,14 +641,14 @@ window.reprintReceipt = function(purchaseId, storeId) {
       <div class="dr"><span>Phone</span><span>${customerPhone}</span></div>
       <div class="dr"><span>Email</span><span>${customerEmail}</span></div></div>
     <div class="sec"><div class="sec-t">Order Info</div>
-      <div class="dr"><span>Purchase ID</span><span style="font-family:monospace">${purchase.id}</span></div>
+      <div class="dr"><span>Purchase ID</span><span style="font-family:monospace">${purchaseId_s}</span></div>
       <div class="dr"><span>Date</span><span>${new Date(purchase.date).toLocaleString()}</span></div>
-      <div class="dr"><span>Reference</span><span style="font-family:monospace">${purchase.reference||'—'}</span></div>
+      <div class="dr"><span>Reference</span><span style="font-family:monospace">${reference_s}</span></div>
       ${purchase.verified?`<div class="dr"><span>Verified At</span><span>${new Date(purchase.verifiedDate).toLocaleString()}</span></div><div class="dr"><span>Verified By</span><span>${cashierName}</span></div>`:''}
     </div>
     <div class="sec"><div class="sec-t">Items</div>
       <table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
-        ${(purchase.items||[]).map(i=>`<tr><td>${i.name}</td><td>${i.quantity}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
+        ${(purchase.items||[]).map(i=>`<tr><td>${escapeHtml(i.name)}</td><td>${i.quantity}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
       </tbody></table>
       <table style="margin-top:8px"><tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
         <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
@@ -913,11 +937,7 @@ window.verifyAndSaveStoreSubaccount = async function(storeId) {
 
     // Step 2: Create / update the Paystack subaccount
     btn.textContent = 'Saving…';
-    const saveResp = await fetch('/api/save-subaccount', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ storeId, business_name, bank_code, account_number })
-    });
+    const saveResp = await _authedPost('/api/save-subaccount', { storeId, business_name, bank_code, account_number });
     const res = await saveResp.json();
     if (!saveResp.ok) throw new Error(res.error || 'Could not save subaccount');
 
@@ -1135,11 +1155,7 @@ window._deleteStore = function(id) {
           }
 
           try {
-            const res  = await fetch('/api/delete-store', {
-              method:  'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({ storeId: id })
-            });
+            const res  = await _authedPost('/api/delete-store', { storeId: id });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Server error during deletion.');
 
@@ -1337,11 +1353,7 @@ window._createHeadAdmin = async function() {
   btn.disabled = true; btn.textContent = 'Creating…';
 
   try {
-    const res  = await fetch('/api/create-head-admin', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ name, email, password, role, storeId: role === 'general' ? null : storeId })
-    });
+    const res  = await _authedPost('/api/create-head-admin', { name, email, password, role, storeId: role === 'general' ? null : storeId });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not create account.');
 
@@ -1362,11 +1374,7 @@ window._deleteHeadAdmin = function(uid, name) {
     const row = document.getElementById(`ha-row-${uid}`);
     if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
     try {
-      const res  = await fetch('/api/delete-head-admin', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ uid })
-      });
+      const res  = await _authedPost('/api/delete-head-admin', { uid });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not delete account.');
       notify.success(`"${name}" deleted.`);

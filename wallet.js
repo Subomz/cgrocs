@@ -26,6 +26,33 @@ const app = getApps().find(a => a.name === 'cardstorage')
   || initializeApp(customerConfig, 'cardstorage');
 const db = getFirestore(app);
 
+// ── API auth helper ───────────────────────────────────────────────────────────
+// Returns the current user's Firebase ID token so wallet API calls can be
+// authenticated server-side. All wallet mutation endpoints now require this.
+async function _getCustomerIdToken() {
+  try {
+    const a = getApps().find(ap => ap.name === 'cardstorage');
+    if (!a) return null;
+    const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js');
+    return await getAuth(a).currentUser?.getIdToken() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function _walletPost(url, body) {
+  const idToken = await _getCustomerIdToken();
+  return fetch(url, {
+    method:  'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(idToken ? { 'Authorization': 'Bearer ' + idToken } : {})
+    },
+    body: JSON.stringify(body)
+  });
+}
+
+
 window.walletBalance = 0;
 
 // ── PIN session state ─────────────────────────────────────────────────────────
@@ -59,11 +86,7 @@ window._walletTopupCallback = function(response) {
   if (!payload) { console.error('wallet: topup callback fired with no payload'); return; }
 
   notify.info('Verifying payment…', 15000);
-  fetch('/api/verify-wallet-topup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reference: response.reference, uid: payload.uid, amount: payload.amount })
-  })
+  _walletPost('/api/verify-wallet-topup', { reference: response.reference, uid: payload.uid, amount: payload.amount })
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.success) {
@@ -440,17 +463,13 @@ window._walletDoWithdraw = async function() {
         }
         btn && (btn.textContent = 'Processing…');
         try {
-          var res  = await fetch('/api/wallet-withdraw', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          var res  = await _walletPost('/api/wallet-withdraw', {
               uid:           ctx.uid,
               amount:        amount,
               accountNumber: acctNo,
               bankCode:      bankCode,
               accountName:   acctName,
               pinToken:      pinToken
-            })
           });
           var data = await res.json();
 
@@ -734,10 +753,7 @@ function _buildNumpad(containerId, mode, uid, onDone, modal) {
       setError('');
       container.querySelectorAll('.wallet-numpad-key').forEach(function(b) { b.disabled = true; });
       try {
-        var res  = await fetch('/api/wallet-set-pin', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: uid, pin: pin })
-        });
+        var res  = await _walletPost('/api/wallet-set-pin', { uid: uid, pin: pin });
         var data = await res.json();
         if (data.success) {
           notify.success('Wallet PIN set! Your wallet is now protected.', 5000);
@@ -763,10 +779,7 @@ function _buildNumpad(containerId, mode, uid, onDone, modal) {
     // ── VERIFY PIN flow ───────────────────────────────────────────────────
     container.querySelectorAll('.wallet-numpad-key').forEach(function(b) { b.disabled = true; });
     try {
-      var res  = await fetch('/api/wallet-verify-pin', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: uid, pin: pin })
-      });
+      var res  = await _walletPost('/api/wallet-verify-pin', { uid: uid, pin: pin });
       var data = await res.json();
       if (data.success && data.token) {
         _storePinToken(data.token);

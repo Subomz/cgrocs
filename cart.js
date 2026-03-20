@@ -83,6 +83,17 @@ function getOrCreateSessionId() {
   }
   return id;
 }
+// ── Auth helper for wallet API calls ─────────────────────────────────────────
+async function _getCustomerIdToken() {
+  try {
+    const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js');
+    const { getApps } = await import('https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js');
+    const a = getApps().find(ap => ap.name === 'cardstorage');
+    return a ? (await getAuth(a).currentUser?.getIdToken() || null) : null;
+  } catch { return null; }
+}
+
+
 
 window.addEventListener('beforeunload', () => {
   deleteAllFirestoreReservations();
@@ -296,7 +307,7 @@ async function savePurchase(purchaseData) {
   }
 }
 
-function showQRCodeModal(purchaseId, items, total, serviceCharge, cartSubtotal) {
+function showQRCodeModal(purchaseId, items, total, convenienceFee, cartSubtotal) {
   const modal = document.createElement('div');
   modal.className = 'qr-modal';
   modal.id = 'qr-modal';
@@ -335,7 +346,7 @@ function showQRCodeModal(purchaseId, items, total, serviceCharge, cartSubtotal) 
 
   document.body.appendChild(modal);
 
-  modal._receiptData = { purchaseId, items, total, serviceCharge, cartSubtotal, storeLabel };
+  modal._receiptData = { purchaseId, items, total, convenienceFee, cartSubtotal, storeLabel };
 
   setTimeout(() => {
     new QRCode(document.getElementById('qrcode'), {
@@ -367,7 +378,7 @@ window.downloadReceiptPDF = function(purchaseId) {
   const qrCanvas = document.querySelector('#qrcode canvas');
   const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : '';
 
-  const { items, total, serviceCharge, cartSubtotal, storeLabel } = data;
+  const { items, total, convenienceFee, cartSubtotal, storeLabel } = data;
   const dateStr = new Date().toLocaleDateString('en-NG', {
     day: 'numeric', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
@@ -385,14 +396,14 @@ window.downloadReceiptPDF = function(purchaseId) {
       </tr>`;
   }).join('');
 
-  const chargeRows = (serviceCharge && serviceCharge > 0) ? `
+  const chargeRows = (convenienceFee && convenienceFee > 0) ? `
       <tr style="border-top:1px solid #e4e4e7;">
         <td colspan="3" style="text-align:right;color:#6b7280;">Subtotal</td>
-        <td style="text-align:right;color:#6b7280;">₦${(cartSubtotal || (total - serviceCharge)).toFixed(2)}</td>
+        <td style="text-align:right;color:#6b7280;">₦${(cartSubtotal || (total - convenienceFee)).toFixed(2)}</td>
       </tr>
       <tr>
-        <td colspan="3" style="text-align:right;color:#6b7280;">Service Charge</td>
-        <td style="text-align:right;color:#6b7280;">₦${serviceCharge.toFixed(2)}</td>
+        <td colspan="3" style="text-align:right;color:#6b7280;">Convenience Fee</td>
+        <td style="text-align:right;color:#6b7280;">₦${convenienceFee.toFixed(2)}</td>
       </tr>` : '';
 
   const html = `<!DOCTYPE html>
@@ -497,7 +508,7 @@ window._paystackCallback = function(response) {
   }
   _paystackPayload = null;
 
-  const { purchaseId, cartSnapshot, total, serviceCharge, cartSubtotal } = payload;
+  const { purchaseId, cartSnapshot, total, convenienceFee, cartSubtotal } = payload;
 
   console.log('Payment successful:', response.reference);
 
@@ -536,7 +547,7 @@ window._paystackCallback = function(response) {
     })),
     total,
     cartSubtotal,
-    serviceCharge,
+    serviceCharge: convenienceFee,
     date:      new Date().toISOString(),
     reference: response.reference,
     verified:  false,
@@ -564,7 +575,7 @@ window._paystackCallback = function(response) {
     });
   }
 
-  showQRCodeModal(purchaseId, cartSnapshot, total, serviceCharge, cartSubtotal);
+  showQRCodeModal(purchaseId, cartSnapshot, total, convenienceFee, cartSubtotal);
 
   cart = [];
   updateCartDisplay();
@@ -598,10 +609,11 @@ async function getStoreSubaccountCode(storeId) {
   return _subaccountCache[storeId] || null;
 }
 
-function getServiceCharge(cartTotal) {
+function getConvenienceFee(cartTotal) {
   if (cartTotal < 1000)  return 50;
   if (cartTotal < 10000) return 100;
-  return 150;
+  if (cartTotal < 50000) return 150;
+  return 200;
 }
 
 // ── Paystack payment ──────────────────────────────────────────────────────────
@@ -640,8 +652,8 @@ window.proceedToPayment = async function() {
   }
 
   var cartTotal      = calculateTotal();
-  var serviceCharge  = getServiceCharge(cartTotal);
-  var grandTotal     = cartTotal + serviceCharge;
+  var convenienceFee = getConvenienceFee(cartTotal);
+  var grandTotal     = cartTotal + convenienceFee;
   var purchaseId     = generatePurchaseId();
   var paystackRef    = purchaseId.replace(/-/g, '');
   var cartSnapshot   = cart.map(function(item) { return Object.assign({}, item); });
@@ -653,7 +665,7 @@ window.proceedToPayment = async function() {
     purchaseId,
     cartSnapshot,
     total:         grandTotal,
-    serviceCharge,
+    convenienceFee,
     cartSubtotal:  cartTotal
   };
 
@@ -667,7 +679,7 @@ window.proceedToPayment = async function() {
       custom_fields: [
         { display_name: 'Purchase ID',    variable_name: 'purchase_id',    value: purchaseId },
         { display_name: 'Store',          variable_name: 'store_id',       value: activeStore },
-        { display_name: 'Service Charge', variable_name: 'service_charge', value: '₦' + serviceCharge }
+        { display_name: 'Convenience Fee', variable_name: 'convenience_fee', value: '₦' + convenienceFee }
       ]
     },
     callback: window._paystackCallback,
@@ -676,7 +688,7 @@ window.proceedToPayment = async function() {
 
   if (subaccountCode) {
     paystackConfig.subaccount         = subaccountCode;
-    paystackConfig.transaction_charge = Math.round(serviceCharge * 100);
+    paystackConfig.transaction_charge = Math.round(convenienceFee * 100);
     paystackConfig.bearer             = 'account';
   }
 
@@ -746,9 +758,13 @@ window.payWithWallet = async function() {
 
   try {
     if (walletBtn) walletBtn.textContent = 'Processing…';
+    const _cartIdToken = await _getCustomerIdToken();
     const res = await fetch('/api/wallet-pay', {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(_cartIdToken ? { 'Authorization': 'Bearer ' + _cartIdToken } : {})
+      },
       body:    JSON.stringify({
         uid,
         storeId:       activeStore,
@@ -912,11 +928,11 @@ function updateCartDisplay() {
   }
 
   if (cartTotal) {
-    const charge       = cart.length > 0 ? getServiceCharge(grandTotal) : 0;
-    const displayTotal = grandTotal + charge;
-    cartTotal.innerHTML = charge > 0
+    const fee          = cart.length > 0 ? getConvenienceFee(grandTotal) : 0;
+    const displayTotal = grandTotal + fee;
+    cartTotal.innerHTML = fee > 0
       ? `<span style="font-size:13px;color:var(--muted);display:block;margin-bottom:2px;">Subtotal: ₦${grandTotal.toFixed(2)}</span>` +
-        `<span style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">Service charge: ₦${charge.toFixed(2)}</span>` +
+        `<span style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">Convenience fee: ₦${fee.toFixed(2)}</span>` +
         `₦${displayTotal.toFixed(2)}`
       : `₦${grandTotal.toFixed(2)}`;
   }

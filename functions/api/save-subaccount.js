@@ -1,19 +1,55 @@
 // functions/api/save-subaccount.js
-import { getAccessToken, fsGet, fsPatch, fromDoc, toFields } from '../_firebase-rest.js';
+import {
+  getAccessToken, fsGet, fsPatch, fromDoc, toFields,
+  verifyCallerIsHeadAdmin, extractBearerToken
+} from '../_firebase-rest.js';
 
-const HEAD_ADMIN_PROJECT = 'cloex-managerpage';
+const HEAD_ADMIN_PROJECT    = 'cloex-managerpage';
+const HEAD_ADMIN_WEB_API_KEY_ENV = 'FIREBASE_HEAD_ADMIN_WEB_API_KEY';
+
+const CORS = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
 
 export async function onRequestPost(context) {
-  const secret = context.env.PAYSTACK_SECRET_KEY;
-  const saJson = context.env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT;
+  const { request, env } = context;
 
-  if (!secret) return Response.json({ error: 'PAYSTACK_SECRET_KEY not configured.' }, { status: 500 });
-  if (!saJson) return Response.json({ error: 'FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT not configured.' }, { status: 500 });
+  const secret = env.PAYSTACK_SECRET_KEY;
+  const saJson = env.FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT;
 
-  const { storeId, business_name, bank_code, account_number } = await context.request.json();
+  if (!secret) return Response.json({ error: 'PAYSTACK_SECRET_KEY not configured.' }, { status: 500, headers: CORS });
+  if (!saJson) return Response.json({ error: 'FIREBASE_HEAD_ADMIN_SERVICE_ACCOUNT not configured.' }, { status: 500, headers: CORS });
+
+  // ── Verify the caller is an authenticated head admin ──────────────────────
+  const idToken = extractBearerToken(request);
+  if (!idToken) {
+    return Response.json({ error: 'Authorization header required.' }, { status: 401, headers: CORS });
+  }
+  if (!env[HEAD_ADMIN_WEB_API_KEY_ENV]) {
+    return Response.json({ error: 'Server configuration error.' }, { status: 500, headers: CORS });
+  }
+  const callerUid = await verifyCallerIsHeadAdmin(idToken, env[HEAD_ADMIN_WEB_API_KEY_ENV]);
+  if (!callerUid) {
+    return Response.json({ error: 'Unauthorized.' }, { status: 401, headers: CORS });
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body) return Response.json({ error: 'Invalid JSON body.' }, { status: 400, headers: CORS });
+
+  const { storeId, business_name, bank_code, account_number } = body;
 
   if (!storeId || !business_name || !bank_code || !account_number) {
-    return Response.json({ error: 'storeId, business_name, bank_code, and account_number are required.' }, { status: 400 });
+    return Response.json(
+      { error: 'storeId, business_name, bank_code, and account_number are required.' },
+      { status: 400, headers: CORS }
+    );
+  }
+
+  // Validate account_number format
+  if (!/^\d{10}$/.test(String(account_number))) {
+    return Response.json({ error: 'account_number must be exactly 10 digits.' }, { status: 400, headers: CORS });
   }
 
   try {
@@ -40,7 +76,10 @@ export async function onRequestPost(context) {
     }
 
     if (!result.status) {
-      return Response.json({ error: result.message || 'Paystack could not save the subaccount.' }, { status: 502 });
+      return Response.json(
+        { error: result.message || 'Paystack could not save the subaccount.' },
+        { status: 502, headers: CORS }
+      );
     }
 
     const subaccount_code = result.data.subaccount_code;
@@ -56,10 +95,14 @@ export async function onRequestPost(context) {
       token
     );
 
-    return Response.json({ subaccount_code, business_name: biz, account_number: acct });
+    return Response.json({ subaccount_code, business_name: biz, account_number: acct }, { headers: CORS });
 
   } catch (e) {
     console.error('[save-subaccount]', e.message);
-    return Response.json({ error: 'Server error: ' + e.message }, { status: 500 });
+    return Response.json({ error: 'Server error: ' + e.message }, { status: 500, headers: CORS });
   }
+}
+
+export async function onRequestOptions() {
+  return new Response(null, { status: 204, headers: CORS });
 }
