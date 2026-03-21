@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="home.css">
+    <!-- Cloudflare Web Analytics (add your token if using CF Analytics) -->
+    <!-- <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token":"YOUR_TOKEN"}'></script> -->
 </head>
 <body>
 
@@ -69,7 +71,7 @@
             </div>
             <div class="hero-stats">
                 <div class="hero-stat">
-                    <span class="hero-stat-num">2</span>
+                    <span class="hero-stat-num" id="hero-store-count">—</span>
                     <span class="hero-stat-label">Store locations</span>
                 </div>
                 <div class="hero-stat-divider"></div>
@@ -216,7 +218,7 @@
                         </div>
                         <div>
                             <h4>Skip the queue</h4>
-                            <p>Your order is prepared before you arrive. Walk in, scan, and walk out.</p>
+                            <p>Walk in, pick your goods, scan, and walk out.</p>
                         </div>
                     </div>
                     <div class="feat-card">
@@ -316,6 +318,10 @@
             } catch(e) { /* rules may block unauthenticated reads — fallback is fine */ }
 
             window._storeLabels = Object.fromEntries(stores.map(s => [s.id, s.label]));
+
+            // Update the hero stat to reflect the real number of stores
+            const countEl = document.getElementById('hero-store-count');
+            if (countEl) countEl.textContent = stores.length;
 
             const container = document.getElementById('store-cards-container');
             if (container) {
