@@ -21,6 +21,11 @@
   --blue:    #2563eb;
   --blue-bg: #dbeafe;
   --nav-h:   64px;
+
+  --oak:        #6B3F1F;
+  --oak-mid:    #8B5230;
+  --oak-light:  #F5EDE4;
+  --oak-border: #D4A882;
   --font:    'DM Sans', 'Segoe UI', Tahoma, sans-serif;
   --mono:    'DM Mono', 'Courier New', monospace;
 }
@@ -154,7 +159,7 @@ body {
   font-size: 13px;
   padding: 6px 16px;
 }
-#store-filter-wrap .filter-pill.active {
+#store-filter-wrap .filter-pill.active { /* oak handled by .filter-pill.active above */
   background: var(--ink);
   color: white;
   border-color: var(--ink);
@@ -214,7 +219,7 @@ body {
   cursor: pointer; font-family: inherit; transition: all .15s; white-space: nowrap;
 }
 .filter-pill:hover  { border-color: var(--ink); color: var(--ink); }
-.filter-pill.active { background: var(--ink); color: white; border-color: var(--ink); }
+.filter-pill.active { background: var(--oak); color: white; border-color: var(--oak); }
 
 .search-wrap {
   display: flex; align-items: center; gap: 8px;
@@ -269,7 +274,7 @@ body {
   font-size: 11px; font-weight: 700;
 }
 .badge-verified { background: var(--green-bg); color: var(--green); }
-.badge-pending  { background: var(--amber-bg); color: var(--amber); }
+.badge-pending  { background: var(--oak-light); color: var(--oak); }
 
 .cashier-chip {
   display: inline-flex; align-items: center; gap: 6px;

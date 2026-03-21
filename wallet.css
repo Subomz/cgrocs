@@ -130,7 +130,7 @@
 
 /* ── Balance card inside panel ───────────────────────────────── */
 .wallet-balance-card {
-  background: #0a0a0a;
+  background: var(--oak);
   margin: 16px;
   border-radius: 14px;
   padding: 22px 22px 20px;
@@ -286,7 +286,7 @@
   transition: all 0.15s;
 }
 .amount-preset:hover  { border-color: #0a0a0a; }
-.amount-preset.active { border-color: #0a0a0a; background: #0a0a0a; color: white; }
+.amount-preset.active { border-color: var(--oak); background: var(--oak); color: white; }
 
 .wallet-field { display: flex; flex-direction: column; gap: 5px; }
 .wallet-field label {
@@ -352,7 +352,7 @@
 .wallet-submit-btn {
   width: 100%;
   padding: 13px;
-  background: #0a0a0a;
+  background: var(--oak);
   color: white;
   border: none;
   border-radius: 8px;
@@ -363,7 +363,7 @@
   transition: background 0.18s, transform 0.1s;
   margin-top: auto;
 }
-.wallet-submit-btn:hover  { background: #333; }
+.wallet-submit-btn:hover  { background: var(--oak-mid); }
 .wallet-submit-btn:active { transform: scale(0.98); }
 .wallet-submit-btn:disabled { background: #aaa; cursor: not-allowed; transform: none; }
 
@@ -376,7 +376,7 @@
 
 /* ── Profile wallet card ──────────────────────────────────────── */
 .wallet-card {
-  background: #0a0a0a;
+  background: var(--oak);
   border-radius: 16px;
   padding: 28px;
   color: white;
@@ -451,8 +451,8 @@
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 .wallet-pin-dot.filled {
-  background: #0a0a0a;
-  border-color: #0a0a0a;
+  background: var(--oak);
+  border-color: var(--oak);
   transform: scale(1.1);
 }
 
@@ -478,7 +478,7 @@
   justify-content: center;
 }
 .wallet-numpad-key:hover  { background: #e4e4e7; }
-.wallet-numpad-key:active { background: #d1d5db; transform: scale(0.95); }
+.wallet-numpad-key:active { background: var(--oak-light); transform: scale(0.95); }
 .wallet-numpad-key:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── PIN setup section ───────────────────────────────────────── */

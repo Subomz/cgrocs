@@ -11,6 +11,11 @@
   --muted:   #6b7280;
   --faint:   #f4f4f5;
   --border:  #e4e4e7;
+
+  --oak:        #6B3F1F;
+  --oak-mid:    #8B5230;
+  --oak-light:  #F5EDE4;
+  --oak-border: #D4A882;
   --font:    'DM Sans', 'Segoe UI', Tahoma, sans-serif;
   --radius:  14px;
 }
@@ -59,7 +64,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   cursor: pointer; font-family: var(--font);
   transition: opacity 0.2s;
 }
-.register-button:hover { opacity: 0.88; }
+.register-button:hover { opacity: 0.95; box-shadow: 0 4px 14px rgba(107,63,31,0.20); }
 
 /* ── Shared section layout ───────────────────────────────────────────────── */
 .section-inner {
@@ -72,7 +77,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   display: inline-block;
   font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .1em;
-  color: var(--muted);
+  color: var(--oak);
 }
 
 .section-label-row { margin-bottom: 12px; }
@@ -128,8 +133,8 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 }
 .hero-badge-dot {
   width: 7px; height: 7px; border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 8px #4ade8088;
+  background: var(--oak-border);
+  box-shadow: 0 0 8px rgba(212,168,130,0.6);
   flex-shrink: 0;
 }
 
@@ -164,7 +169,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   cursor: pointer; font-family: var(--font);
   transition: opacity 0.2s, transform 0.15s;
 }
-.btn-hero-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-hero-primary:hover { opacity: 0.95; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(107,63,31,0.25); }
 .btn-hero-primary:active { transform: scale(0.98); }
 
 .btn-hero-secondary {
@@ -274,7 +279,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   font-size: 13px; font-weight: 600; color: var(--muted);
   white-space: nowrap;
 }
-.trust-item svg { flex-shrink: 0; }
+.trust-item svg { flex-shrink: 0; color: var(--oak); }
 .trust-dot {
   width: 4px; height: 4px; border-radius: 50%;
   background: var(--border);
@@ -315,10 +320,10 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 }
 .step-icon-wrap {
   width: 48px; height: 48px; border-radius: 12px;
-  background: var(--faint);
+  background: var(--oak-light);
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 18px;
-  color: var(--ink);
+  color: var(--oak);
 }
 .step-card h3 {
   font-size: 16px; font-weight: 700; color: var(--ink);
@@ -361,7 +366,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   cursor: pointer; font-family: var(--font);
   transition: background 0.2s, transform 0.15s;
 }
-.btn-feature-cta:hover  { background: #333; }
+.btn-feature-cta:hover  { background: var(--oak-mid); }
 .btn-feature-cta:active { transform: scale(0.98); }
 
 .feature-cards {
@@ -385,9 +390,9 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
 
 .feat-card-icon {
   width: 38px; height: 38px; border-radius: 10px;
-  background: var(--faint);
+  background: var(--oak-light);
   display: flex; align-items: center; justify-content: center;
-  color: var(--ink); flex-shrink: 0;
+  color: var(--oak); flex-shrink: 0;
 }
 .feat-card h4 {
   font-size: 14px; font-weight: 700; color: var(--ink);
@@ -516,7 +521,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   transition: opacity 0.2s;
   white-space: nowrap;
 }
-.btn-cta-primary:hover { opacity: 0.88; }
+.btn-cta-primary:hover { opacity: 0.95; box-shadow: 0 4px 14px rgba(107,63,31,0.20); }
 
 .btn-cta-ghost {
   padding: 13px 28px;
