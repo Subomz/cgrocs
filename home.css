@@ -366,7 +366,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   cursor: pointer; font-family: var(--font);
   transition: background 0.2s, transform 0.15s;
 }
-.btn-feature-cta:hover  { background: #333; }
+.btn-feature-cta:hover  { background: #555; }
 .btn-feature-cta:active { transform: scale(0.98); }
 
 .feature-cards {
@@ -451,7 +451,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   font-family: var(--font); margin-top: 10px;
   transition: background 0.2s;
 }
-.btn-buy:hover { background: #333; }
+.btn-buy:hover { background: #555; }
 
 /* Login prompt overlaid at the bottom of the products section */
 .products-login-prompt {
@@ -481,7 +481,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   cursor: pointer; font-family: var(--font);
   transition: background 0.2s;
 }
-.btn-plp-signup:hover { background: #333; }
+.btn-plp-signup:hover { background: #555; }
 
 .btn-plp-login {
   padding: 11px 26px;

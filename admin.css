@@ -330,7 +330,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   border: none; border-radius: 6px; cursor: pointer;
   font-weight: 600; margin-right: 10px;
 }
-.file-input::-webkit-file-upload-button:hover { background: #333; }
+.file-input::-webkit-file-upload-button:hover { background: #555; }
 
 #image-preview-container {
   background: var(--faint); padding: 14px;
@@ -354,7 +354,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   font-weight: 700; font-size: 14px; font-family: var(--font);
   transition: background 0.2s; margin-top: 4px;
 }
-#save-btn:hover, .btn-delete:hover, .btn-edit:hover { background: #333; }
+#save-btn:hover, .btn-delete:hover, .btn-edit:hover { background: #555; }
 
 /* ── PRODUCT GRID ─────────────────────────────────────────── */
 .product-grid {
@@ -506,7 +506,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   text-transform: uppercase; letter-spacing: 0.04em;
   background: var(--black); color: white;
 }
-.btn-scan:hover, .btn-verify:hover { background: #333; }
+.btn-scan:hover, .btn-verify:hover { background: #555; }
 
 /* Verification result */
 .verification-result {
@@ -559,7 +559,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   background: var(--black); color: white;
   transition: background 0.2s; margin-right: 8px;
 }
-.btn-clear-result:hover, .btn-print:hover { background: #333; }
+.btn-clear-result:hover, .btn-print:hover { background: #555; }
 
 /* ── PENDING PURCHASES ────────────────────────────────────── */
 .pending-wrap { max-width: 900px; margin: 28px auto; padding: 0 20px 40px; }

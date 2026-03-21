@@ -212,7 +212,7 @@ body {
 .card-description {
   font-size: 12px; color: var(--muted);
   margin: 4px 0 6px; line-height: 1.4; text-align: center;
-  display: -webkit-box; -webkit-line-clamp: 2;
+  display: -webkit-box; line-clamp: 2;
   -webkit-box-orient: vertical; overflow: hidden;
 }
 .card-no-desc { color: #bbb; font-style: italic; }
@@ -226,7 +226,7 @@ body {
 }
 .qty-selector button:first-child { border-radius: 6px 0 0 6px; }
 .qty-selector button:last-child  { border-radius: 0 6px 6px 0; }
-.qty-selector button:hover { background: #333; }
+.qty-selector button:hover { background: #555; }
 .qty-selector input {
   width: 50px; height: 34px; text-align: center;
   border-top: 1.5px solid var(--border); border-bottom: 1.5px solid var(--border);
@@ -240,7 +240,7 @@ body {
   cursor: pointer; font-weight: 700; font-size: 14px;
   font-family: var(--font); transition: background 0.2s;
 }
-.btn-buy:hover { background: #333; }
+.btn-buy:hover { background: #555; }
 
 button:disabled {
   background-color: #ccc !important;
@@ -318,7 +318,7 @@ button:disabled {
   font-weight: 700; font-size: 15px; font-family: var(--font);
   cursor: pointer; transition: background 0.2s;
 }
-.btn-pay:hover { background: #333; }
+.btn-pay:hover { background: #555; }
 .btn-pay:disabled { opacity: 0.45 !important; cursor: not-allowed !important; background: #999 !important; }
 
 /* Cart item row */
@@ -421,7 +421,7 @@ button:disabled {
 .btn-download { background: white; color: var(--ink); border: 1.5px solid var(--border); }
 .btn-download:hover { background: var(--faint); border-color: var(--ink); }
 .btn-done { background: var(--black); color: white; }
-.btn-done:hover { background: #333; }
+.btn-done:hover { background: #555; }
 
 /* ── ORDERS PANEL (inline styles moved here) ── */
 .ord-filt {

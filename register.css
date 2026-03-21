@@ -102,7 +102,7 @@ h1.page-title {
   transition: background 0.2s, transform 0.1s;
   font-family: var(--font);
 }
-#submit:hover  { background: #333; }
+#submit:hover  { background: #555; }
 #submit:active { transform: scale(0.98); }
 #submit:disabled { background: #aaa; cursor: not-allowed; }
 
