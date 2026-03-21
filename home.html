@@ -3,76 +3,316 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CGrocs - Welcome</title>
+    <title>CGrocs — Fresh Groceries, Ready for Pickup</title>
+    <meta name="description" content="Browse fresh groceries online and pick them up in-store. No queues, no hassle.">
     <link rel="icon" type="image/x-icon" href="images/CGrocs.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="home.css">
     <!-- Vercel Analytics -->
-    <script>
-     window.va = window.va || function () {
-        (window.vaq = window.vaq || []).push(arguments);
-        };
-    </script>
+    <script>window.va = window.va || function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
     <script defer src="/_vercel/insights/script.js"></script>
     <!-- Vercel Speed Insights -->
-    <script>
-     window.si = window.si || function () {
-        (window.siq = window.siq || []).push(arguments);
-        };
-    </script>
+    <script>window.si = window.si || function(){(window.siq=window.siq||[]).push(arguments);};</script>
     <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
+
+    <!-- ── NAV ───────────────────────────────────────────────────────────── -->
     <nav class="home-nav">
-        <div class="navlogo" style="display:flex;align-items:center;"><img src="images/CGrocs.png" alt="CGrocs" width="44px"><span id="home-store-label" style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);margin-left:8px;"></span></div>
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div class="navlogo" style="display:flex;align-items:center;">
+            <img src="images/CGrocs.png" alt="CGrocs" width="44px">
+            <span id="home-store-label" class="nav-store-label"></span>
+        </div>
+        <div class="nav-actions">
             <button onclick="showStorePicker()" class="switch-store-btn" id="switch-store-btn">Switch Store</button>
             <button onclick="window.location.href='login.html'" class="login-button">Login</button>
+            <button onclick="window.location.href='register.html'" class="register-button">Sign Up</button>
         </div>
     </nav>
 
-    <!-- Store Picker Modal — cards populated dynamically from Firestore storeConfig -->
+    <!-- ── STORE PICKER MODAL ─────────────────────────────────────────────── -->
     <div class="store-picker-overlay" id="store-picker" style="display:none">
         <div class="store-picker-box">
             <div class="sp-header">
                 <img src="images/CGrocs.png" alt="CGrocs">
-                <h1>Switch Store</h1>
-                <p>Choose which store to browse</p>
+                <h1>Choose a Store</h1>
+                <p>Pick the location nearest to you</p>
             </div>
             <div class="sp-body">
-                <span class="sp-label">Select your store</span>
+                <span class="sp-label">Available stores</span>
                 <div class="store-cards" id="store-cards-container">
-                    <!-- Populated by loadStoreCards() below -->
                     <p style="color:var(--muted);font-size:13px;text-align:center;grid-column:1/-1;">Loading stores…</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="product-container-home" class="product-grid"></div>
+    <!-- ── HERO ──────────────────────────────────────────────────────────── -->
+    <section class="hero">
+        <div class="hero-bg-grid"></div>
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span class="hero-badge-dot"></span>
+                Now serving multiple locations
+            </div>
+            <h1 class="hero-headline">
+                Groceries ordered<br>
+                <em>your way.</em>
+            </h1>
+            <p class="hero-sub">
+                Browse fresh products online, pay securely, and pick up in store —
+                no queues, no surprises.
+            </p>
+            <div class="hero-actions">
+                <button class="btn-hero-primary" onclick="scrollToProducts()">
+                    Browse Products
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+                <button class="btn-hero-secondary" onclick="window.location.href='register.html'">
+                    Create Free Account
+                </button>
+            </div>
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <span class="hero-stat-num">2</span>
+                    <span class="hero-stat-label">Store locations</span>
+                </div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat">
+                    <span class="hero-stat-num">₦0</span>
+                    <span class="hero-stat-label">To sign up</span>
+                </div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat">
+                    <span class="hero-stat-num">QR</span>
+                    <span class="hero-stat-label">Instant pickup</span>
+                </div>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="hero-card-stack">
+                <div class="hcard hcard-back">
+                    <div class="hcard-icon">🥦</div>
+                    <div class="hcard-label">Fresh Produce</div>
+                    <div class="hcard-tag">In Stock</div>
+                </div>
+                <div class="hcard hcard-mid">
+                    <div class="hcard-icon">🧀</div>
+                    <div class="hcard-label">Dairy & Eggs</div>
+                    <div class="hcard-tag">In Stock</div>
+                </div>
+                <div class="hcard hcard-front">
+                    <div class="hcard-top">
+                        <img src="images/CGrocs.png" alt="" width="28">
+                        <span>CGrocs</span>
+                    </div>
+                    <div class="hcard-icon">🛒</div>
+                    <div class="hcard-label">Your Order Ready</div>
+                    <div class="hcard-qr">
+                        <div class="qr-mock">
+                            <div class="qr-row"><span></span><span></span><span></span><span></span><span></span></div>
+                            <div class="qr-row"><span></span><span class="q"></span><span></span><span class="q"></span><span></span></div>
+                            <div class="qr-row"><span class="q"></span><span></span><span class="q"></span><span></span><span class="q"></span></div>
+                            <div class="qr-row"><span></span><span class="q"></span><span></span><span class="q"></span><span></span></div>
+                            <div class="qr-row"><span></span><span></span><span></span><span></span><span></span></div>
+                        </div>
+                        <span class="qr-hint">Show at counter</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-    <!-- Switch Store button style -->
-    <style>
-        .switch-store-btn {
-            padding: 8px 18px;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.20);
-            color: rgba(255,255,255,0.90);
-            border-radius: 20px; font-size: 14px; font-weight: 600;
-            cursor: pointer; font-family: var(--font);
-            transition: background 0.2s, color 0.2s;
-        }
-        .switch-store-btn:hover { background: rgba(255,255,255,0.22); color: white; }
-    </style>
+    <!-- ── TRUST BAR ─────────────────────────────────────────────────────── -->
+    <div class="trust-bar">
+        <div class="trust-bar-inner">
+            <div class="trust-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Secure payments via Paystack
+            </div>
+            <div class="trust-dot"></div>
+            <div class="trust-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                Quick in-store pickup
+            </div>
+            <div class="trust-dot"></div>
+            <div class="trust-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+                Wallet top-up & rewards
+            </div>
+            <div class="trust-dot"></div>
+            <div class="trust-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Multiple store locations
+            </div>
+        </div>
+    </div>
 
+    <!-- ── HOW IT WORKS ──────────────────────────────────────────────────── -->
+    <section class="how-section">
+        <div class="section-inner">
+            <div class="section-label-row">
+                <span class="section-eyebrow">How it works</span>
+            </div>
+            <h2 class="section-title">Three steps to your groceries</h2>
+
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-num">01</div>
+                    <div class="step-icon-wrap">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </div>
+                    <h3>Browse & add to cart</h3>
+                    <p>Explore products by category, check stock levels in real time, and build your order from any device.</p>
+                </div>
+                <div class="step-connector">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </div>
+                <div class="step-card">
+                    <div class="step-num">02</div>
+                    <div class="step-icon-wrap">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                    </div>
+                    <h3>Pay securely online</h3>
+                    <p>Checkout with your card via Paystack or use your CGrocs wallet — no cash handling at the counter.</p>
+                </div>
+                <div class="step-connector">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </div>
+                <div class="step-card">
+                    <div class="step-num">03</div>
+                    <div class="step-icon-wrap">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    </div>
+                    <h3>Pick up with your QR code</h3>
+                    <p>Show the QR code on your phone at the store counter — your order is bagged and waiting for you.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── FEATURES ──────────────────────────────────────────────────────── -->
+    <section class="features-section">
+        <div class="section-inner">
+            <div class="features-grid">
+                <div class="feature-main">
+                    <span class="section-eyebrow">Why CGrocs</span>
+                    <h2 class="section-title" style="margin-top:12px;">Everything you need,<br>nothing you don't.</h2>
+                    <p class="feature-main-body">
+                        We built CGrocs to make grocery shopping faster and less stressful — for customers and store staff alike. No apps to download, no membership fees.
+                    </p>
+                    <button class="btn-feature-cta" onclick="window.location.href='register.html'">
+                        Get started — it's free
+                    </button>
+                </div>
+                <div class="feature-cards">
+                    <div class="feat-card">
+                        <div class="feat-card-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </div>
+                        <div>
+                            <h4>Real-time stock</h4>
+                            <p>Stock levels update live — what you see is what's available right now.</p>
+                        </div>
+                    </div>
+                    <div class="feat-card">
+                        <div class="feat-card-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <div>
+                            <h4>Skip the queue</h4>
+                            <p>Your order is prepared before you arrive. Walk in, scan, and walk out.</p>
+                        </div>
+                    </div>
+                    <div class="feat-card">
+                        <div class="feat-card-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        </div>
+                        <div>
+                            <h4>Wallet & history</h4>
+                            <p>Top up your wallet, pay faster, and track every purchase in your profile.</p>
+                        </div>
+                    </div>
+                    <div class="feat-card">
+                        <div class="feat-card-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        </div>
+                        <div>
+                            <h4>Multiple locations</h4>
+                            <p>Switch between stores in one tap — same account, all your history.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── PRODUCTS PREVIEW ──────────────────────────────────────────────── -->
+    <section class="products-section" id="products-section">
+        <div class="section-inner">
+            <div class="products-header">
+                <div>
+                    <span class="section-eyebrow">Browse products</span>
+                    <h2 class="section-title" style="margin-top:8px;">What's in store today</h2>
+                </div>
+                <div class="products-header-actions">
+                    <button onclick="showStorePicker()" class="btn-switch-store-inline">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <span id="products-store-label">Store 1</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="product-container-home" class="product-grid"></div>
+
+        <!-- Overlay prompting login to actually add to cart -->
+        <div class="products-login-prompt">
+            <div class="plp-inner">
+                <p>Create a free account or log in to add items to your cart and place an order.</p>
+                <div class="plp-actions">
+                    <button onclick="window.location.href='register.html'" class="btn-plp-signup">Create Account</button>
+                    <button onclick="window.location.href='login.html'" class="btn-plp-login">Login</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── CTA BANNER ────────────────────────────────────────────────────── -->
+    <section class="cta-section">
+        <div class="cta-inner">
+            <div class="cta-text">
+                <h2>Ready to shop smarter?</h2>
+                <p>Join CGrocs and skip the queue. Free to sign up, no app download needed.</p>
+            </div>
+            <div class="cta-actions">
+                <button onclick="window.location.href='register.html'" class="btn-cta-primary">Create Free Account</button>
+                <button onclick="window.location.href='login.html'" class="btn-cta-ghost">Already have an account</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── FOOTER ────────────────────────────────────────────────────────── -->
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-brand">
+                <img src="images/CGrocs.png" alt="CGrocs" width="36">
+                <span>CGrocs</span>
+            </div>
+            <p class="footer-tagline">Fresh groceries, ordered online, collected in store.</p>
+            <p class="footer-copy">&copy; 2025 CGrocs. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- ── SCRIPTS ───────────────────────────────────────────────────────── -->
     <script src="notifications.js"></script>
     <script src="cardstorage.js" type="module"></script>
 
     <script type="module">
-        import { initializeApp, getApps }         from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged }     from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc }       from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+        import { initializeApp, getApps }     from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc }   from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
         import { customerConfig, headAdminConfig, STORE_IDS, STORE_LABELS } from "./firebase-config.js";
 
         // Redirect logged-in customers straight to the shop
@@ -95,11 +335,12 @@
             window._storeLabels = Object.fromEntries(stores.map(s => [s.id, s.label]));
 
             const container = document.getElementById('store-cards-container');
-            if (!container) return;
-            container.innerHTML = stores.map(s => `
-                <button class="store-card" onclick="pickStore('${s.id}')">
-                    <div class="store-name">${s.label}</div>
-                </button>`).join('');
+            if (container) {
+                container.innerHTML = stores.map(s => `
+                    <button class="store-card" onclick="pickStore('${s.id}')">
+                        <div class="store-name">${s.label}</div>
+                    </button>`).join('');
+            }
         }
 
         loadStoreCards();
@@ -108,17 +349,17 @@
             document.getElementById('store-picker').style.display = 'flex';
         };
 
-        // pickStore: switch which store is previewed on home page (no login redirect)
         window.pickStore = function(storeId) {
             sessionStorage.setItem('selectedStore', storeId);
             if (window._storeLabels && window._storeLabels[storeId]) {
                 sessionStorage.setItem('storeLabel_' + storeId, window._storeLabels[storeId]);
             }
-            // Update store label in nav
+            const label = (window._storeLabels && window._storeLabels[storeId]) ? window._storeLabels[storeId] : storeId;
             const navLabel = document.getElementById('home-store-label');
-            if (navLabel) navLabel.textContent = (window._storeLabels && window._storeLabels[storeId]) ? window._storeLabels[storeId] : storeId;
+            if (navLabel) navLabel.textContent = label;
+            const prodLabel = document.getElementById('products-store-label');
+            if (prodLabel) prodLabel.textContent = label;
             document.getElementById('store-picker').style.display = 'none';
-            // Reload products for the chosen store
             if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
         };
 
@@ -127,16 +368,39 @@
                 sessionStorage.setItem('selectedStore', 'store1');
             }
             await loadStoreCards();
-            // Set store label in nav on initial load
             const storeId  = sessionStorage.getItem('selectedStore') || 'store1';
             const cached   = sessionStorage.getItem('storeLabel_' + storeId);
+            const label    = cached || storeId;
             const navLabel = document.getElementById('home-store-label');
-            if (navLabel) navLabel.textContent = cached || storeId;
+            if (navLabel) navLabel.textContent = label;
+            const prodLabel = document.getElementById('products-store-label');
+            if (prodLabel) prodLabel.textContent = label;
             if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
         });
 
-        // Allow closing the picker by clicking the backdrop (only if a store is already selected)
         document.getElementById('store-picker').addEventListener('click', function(e) {
             if (e.target === this) this.style.display = 'none';
         });
     </script>
+
+    <script>
+        function scrollToProducts() {
+            document.getElementById('products-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Intersection Observer — animate sections on scroll
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.12 });
+
+        document.querySelectorAll('.step-card, .feat-card, .hero-content, .hero-visual').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
