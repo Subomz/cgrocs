@@ -98,12 +98,21 @@ async function loadProfile(uid) {
 
     const p = profileData;
 
-    setValue('first-name',    p.firstName || '');
-    setValue('last-name',     p.lastName  || '');
+    // Name: prefer Firestore doc fields, fall back to Firebase Auth displayName
+    const authDisplayName = currentUser.displayName || '';
+    const authParts = authDisplayName.split(' ');
+    const authFirst = authParts[0] || '';
+    const authLast  = authParts.slice(1).join(' ') || '';
+
+    setValue('first-name',    p.firstName || authFirst);
+    setValue('last-name',     p.lastName  || authLast);
     setValue('phone',         p.phone     || '');
     setValue('email-display', currentUser.email || '');
 
-    const fullName = p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Your Name';
+    const fullName = p.fullName
+        || `${p.firstName || ''} ${p.lastName || ''}`.trim()
+        || authDisplayName
+        || 'Your Name';
     setTextContent('sidebar-name',  fullName);
     setTextContent('sidebar-email', currentUser.email || '');
 
@@ -208,6 +217,13 @@ window.saveProfile = async function() {
 
     try {
         await setDoc(doc(db, "users", currentUser.uid), updated, { merge: true });
+
+        // Keep Firebase Auth displayName in sync so other parts of the app
+        // can read the name even if Firestore is unavailable
+        try {
+            const { updateProfile } = await import('https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js');
+            await updateProfile(currentUser, { displayName: updated.fullName });
+        } catch(e) { console.warn('Could not update Auth displayName:', e.message); }
 
         // Update local state so subsequent saves also have the correct avatar
         profileData = { ...updated, walletBalance: profileData.walletBalance };

@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-import { customerConfig } from "./firebase-config.js"; // fix #10
+import { customerConfig } from "./firebase-config.js";
 
 const APP_NAME = 'cardstorage';
 let app;
@@ -32,9 +32,8 @@ document.getElementById('submit').addEventListener('click', async function (e) {
     btn.disabled    = true;
     btn.textContent = 'Creating account...';
 
+    // ── Step 1: Create Firebase Auth user ─────────────────────────────────────
     let user = null;
-
-    // ── Step 1: Create Auth user ──────────────────────────────────────────────
     try {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         user = cred.user;
@@ -50,36 +49,36 @@ document.getElementById('submit').addEventListener('click', async function (e) {
         return;
     }
 
-    // ── Step 2: Save profile to Firestore ─────────────────────────────────────
-    // Fix #7: if Firestore save fails after auth user is already created,
-    // we redirect to setup-profile.html so the user can retry saving their
-    // profile without needing to create a new account.
+    const fullName = `${firstName} ${lastName}`;
+
+    // ── Step 2: Store name in Firebase Auth displayName ───────────────────────
+    // This always works for the authenticated user — no Firestore rules needed.
     try {
-        const profileData = {
-            firstName,
-            lastName,
-            fullName:  `${firstName} ${lastName}`,
-            phone:     phone || '',
-            email,
-            createdAt: new Date().toISOString(),
-            uid:       user.uid
-        };
-
-        await setDoc(doc(db, "users", user.uid), profileData);
-
-        notify.success("Account created successfully!");
-        setTimeout(() => window.location.href = "customer.html", 700);
-
-    } catch (firestoreError) {
-        // Auth user was created but profile save failed.
-        // Send to setup-profile.html where they can retry — they won't need
-        // to register again since the auth account already exists.
-        console.error("register.js: Firestore profile save failed:", firestoreError.code, firestoreError.message);
-        notify.warning(
-            "Account created, but your profile couldn't be saved. " +
-            "Please complete your profile on the next page.",
-            6000
-        );
-        setTimeout(() => window.location.href = "setup-profile.html", 2000);
+        await updateProfile(user, { displayName: fullName });
+    } catch (profileError) {
+        // Non-fatal — we still have the user account
+        console.warn("register.js: Could not set displayName:", profileError.message);
     }
+
+    // ── Step 3: Write minimal Firestore doc (phone + metadata only) ───────────
+    // Name is already in Firebase Auth so this doc only needs to store phone.
+    // If the Firestore write fails due to security rules the user can still
+    // shop — name comes from Auth and phone can be added later in their profile.
+    try {
+        await setDoc(doc(db, "users", user.uid), {
+            uid:   user.uid,
+            email,
+            phone:     phone || '',
+            createdAt: new Date().toISOString()
+        });
+    } catch (firestoreError) {
+        // Non-fatal — log it but don't block the user
+        console.warn("register.js: Firestore write failed (non-fatal):", firestoreError.code, firestoreError.message);
+    }
+
+    // ── Always proceed to the shop ────────────────────────────────────────────
+    notify.success("Account created! Welcome to CGrocs.");
+    sessionStorage.setItem('tab_active', 'true');
+    if (!sessionStorage.getItem('selectedStore')) sessionStorage.setItem('selectedStore', 'store1');
+    setTimeout(() => { window.location.href = "customer.html"; }, 700);
 });
