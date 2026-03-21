@@ -218,7 +218,7 @@
                         </div>
                         <div>
                             <h4>Skip the queue</h4>
-                            <p>Walk in, pick your goods, scan, and walk out.</p>
+                            <p>Walk in, pick your goods scan, and walk out.</p>
                         </div>
                     </div>
                     <div class="feat-card">
@@ -255,7 +255,7 @@
                 <div class="products-header-actions">
                     <button onclick="showStorePicker()" class="btn-switch-store-inline">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                        <span id="products-store-label">Store 1</span>
+                        <span id="products-store-label"></span>
                     </button>
                 </div>
             </div>
@@ -286,7 +286,7 @@
                 <span>CGrocs</span>
             </div>
             <p class="footer-tagline">Fresh groceries, ordered online, collected in store.</p>
-            <p class="footer-copy">&copy; 2025 CGrocs. All rights reserved.</p>
+            <p class="footer-copy">&copy; 2026 CGrocs. All rights reserved.</p>
         </div>
     </footer>
 
@@ -306,6 +306,16 @@
         onAuthStateChanged(custAuth, user => { if (user) window.location.href = 'customer.html'; });
 
         // Load store list from Firestore; fall back to firebase-config.js defaults
+        // Update every element showing the active store name
+        function _applyStoreLabel(storeId) {
+            const label = (window._storeLabels && window._storeLabels[storeId]) || storeId;
+            sessionStorage.setItem('storeLabel_' + storeId, label);
+            const navLabel  = document.getElementById('home-store-label');
+            const prodLabel = document.getElementById('products-store-label');
+            if (navLabel)  navLabel.textContent  = label;
+            if (prodLabel) prodLabel.textContent = label;
+        }
+
         async function loadStoreCards() {
             let stores = STORE_IDS.map(id => ({ id, label: STORE_LABELS[id] || id }));
             try {
@@ -317,12 +327,14 @@
                 }
             } catch(e) { /* rules may block unauthenticated reads — fallback is fine */ }
 
+            // Build label map from real Firestore data
             window._storeLabels = Object.fromEntries(stores.map(s => [s.id, s.label]));
 
-            // Update the hero stat to reflect the real number of stores
+            // Update hero store count
             const countEl = document.getElementById('hero-store-count');
             if (countEl) countEl.textContent = stores.length;
 
+            // Populate store picker cards
             const container = document.getElementById('store-cards-container');
             if (container) {
                 container.innerHTML = stores.map(s => `
@@ -330,9 +342,12 @@
                         <div class="store-name">${s.label}</div>
                     </button>`).join('');
             }
-        }
 
-        loadStoreCards();
+            // Apply the real Firestore label for the active store
+            const activeId = sessionStorage.getItem('selectedStore') || stores[0]?.id || 'store1';
+            sessionStorage.setItem('selectedStore', activeId);
+            _applyStoreLabel(activeId);
+        }
 
         window.showStorePicker = function() {
             document.getElementById('store-picker').style.display = 'flex';
@@ -340,30 +355,13 @@
 
         window.pickStore = function(storeId) {
             sessionStorage.setItem('selectedStore', storeId);
-            if (window._storeLabels && window._storeLabels[storeId]) {
-                sessionStorage.setItem('storeLabel_' + storeId, window._storeLabels[storeId]);
-            }
-            const label = (window._storeLabels && window._storeLabels[storeId]) ? window._storeLabels[storeId] : storeId;
-            const navLabel = document.getElementById('home-store-label');
-            if (navLabel) navLabel.textContent = label;
-            const prodLabel = document.getElementById('products-store-label');
-            if (prodLabel) prodLabel.textContent = label;
+            _applyStoreLabel(storeId);
             document.getElementById('store-picker').style.display = 'none';
             if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
         };
 
         document.addEventListener('DOMContentLoaded', async function() {
-            if (!sessionStorage.getItem('selectedStore')) {
-                sessionStorage.setItem('selectedStore', 'store1');
-            }
             await loadStoreCards();
-            const storeId  = sessionStorage.getItem('selectedStore') || 'store1';
-            const cached   = sessionStorage.getItem('storeLabel_' + storeId);
-            const label    = cached || storeId;
-            const navLabel = document.getElementById('home-store-label');
-            if (navLabel) navLabel.textContent = label;
-            const prodLabel = document.getElementById('products-store-label');
-            if (prodLabel) prodLabel.textContent = label;
             if (typeof window.reloadStoreProducts === 'function') window.reloadStoreProducts();
         });
 
