@@ -366,7 +366,7 @@ body { font-family: var(--font); background: #f8f8f9; color: var(--ink); }
   cursor: pointer; font-family: var(--font);
   transition: background 0.2s, transform 0.15s;
 }
-.btn-feature-cta:hover  { background: var(--oak-mid); }
+.btn-feature-cta:hover  { background: #333; }
 .btn-feature-cta:active { transform: scale(0.98); }
 
 .feature-cards {
