@@ -9,22 +9,27 @@
 .wallet-nav-badge {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 13px;
+  gap: 7px;
+  padding: 7px 15px;
   border-radius: 20px;
-  background: rgba(255,255,255,0.10);
-  border: 1px solid rgba(255,255,255,0.20);
-  color: rgba(255,255,255,0.90);
+  background: var(--oak, #6B3F1F);
+  border: 1.5px solid var(--oak-border, #D4A882);
+  color: #fff;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   font-family: var(--font, 'DM Sans', sans-serif);
-  transition: background 0.2s;
+  transition: background 0.2s, box-shadow 0.2s;
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(107,63,31,0.35);
+  letter-spacing: 0.01em;
 }
-.wallet-nav-badge:hover { background: rgba(255,255,255,0.20); }
-.wallet-nav-icon { font-size: 14px; line-height: 1; }
+.wallet-nav-badge:hover {
+  background: var(--oak-mid, #8B5230);
+  box-shadow: 0 4px 14px rgba(107,63,31,0.45);
+}
+.wallet-nav-icon { font-size: 15px; line-height: 1; }
 
 /* ── Slide-in panel overlay ──────────────────────────────────── */
 #wallet-overlay {
@@ -53,7 +58,7 @@
 
 /* ── Panel header ────────────────────────────────────────────── */
 .wallet-panel-header {
-  background: var(--black, #0a0a0a);
+  background: var(--oak, #6B3F1F);
   color: white;
   padding: 18px 20px;
   display: flex;
@@ -363,7 +368,7 @@
   transition: background 0.18s, transform 0.1s;
   margin-top: auto;
 }
-.wallet-submit-btn:hover  { background: var(--oak-mid); }
+.wallet-submit-btn:hover  { background: var(--oak-mid, #8B5230); }
 .wallet-submit-btn:active { transform: scale(0.98); }
 .wallet-submit-btn:disabled { background: #aaa; cursor: not-allowed; transform: none; }
 
