@@ -22,7 +22,6 @@
   --nav-h:    64px;
 
   --oak:        #6B3F1F;
-  --oak-mid:    #8B5230;
   --oak-light:  #F5EDE4;
   --oak-border: #D4A882;
   --font:     'DM Sans', 'Segoe UI', Tahoma, sans-serif;
@@ -229,7 +228,7 @@ body {
 }
 .qty-selector button:first-child { border-radius: 6px 0 0 6px; }
 .qty-selector button:last-child  { border-radius: 0 6px 6px 0; }
-.qty-selector button:hover { background: var(--oak-mid); }
+.qty-selector button:hover { background: rgba(255,255,255,0.22); }
 .qty-selector input {
   width: 50px; height: 34px; text-align: center;
   border-top: 1.5px solid var(--border); border-bottom: 1.5px solid var(--border);
@@ -243,7 +242,7 @@ body {
   cursor: pointer; font-weight: 700; font-size: 14px;
   font-family: var(--font); transition: background 0.2s;
 }
-.btn-buy:hover { background: var(--oak-mid); }
+.btn-buy:hover { background: rgba(255,255,255,0.22); }
 
 button:disabled {
   background-color: #ccc !important;
