@@ -19,6 +19,10 @@ const adminLogApp = getApps().find(a => a.name === 'admin-guard')
 const adminLogDb = getFirestore(adminLogApp);
 
 // ── Active store — always resolved live so auth guards can set it first ───────
+// Never freeze _storeId at module load. col() and docRef() call
+// resolveStoreId() fresh on every Firestore operation so that by the time
+// init() or reloadStoreProducts() runs the auth guard has already written
+// the correct storeId to sessionStorage / window.cashierStoreId.
 function resolveStoreId() {
     return window.cashierStoreId
         || sessionStorage.getItem('cashierStoreId')
@@ -75,6 +79,9 @@ async function loadProducts() {
     const loaded = [];
     snap.forEach(d => loaded.push({ id: d.id, ...d.data() }));
     if (loaded.length === 0 && !snap.metadata.fromCache) {
+      // Only seed when Firestore confirms the collection is genuinely empty.
+      // If the read came from cache (e.g. a permissions error returned nothing),
+      // we skip seeding to avoid silently overwriting a store's products.
       await initializeDefaultProducts();
       return loadProducts();
     }
@@ -140,7 +147,7 @@ async function populateCategoryDropdown(selectedValue) {
   const sel = document.getElementById('p-category'); if (!sel) return;
   const cats = await getAllCategories();
   sel.innerHTML = '<option value="">— No category —</option>' +
-    cats.map(c => `<option value="${escapeHtml(c)}"${c === selectedValue ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+    cats.map(c => `<option value="${c}"${c === selectedValue ? ' selected' : ''}>${c}</option>`).join('');
 }
 
 //  Add/delete category modal 
@@ -151,8 +158,8 @@ window.openAddCategoryModal = function() {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
   modal.innerHTML = `
     <div style="background:white;border-radius:16px;width:100%;max-width:400px;padding:28px 24px 22px;box-shadow:0 8px 40px rgba(0,0,0,0.18);font-family:'DM Sans','Segoe UI',sans-serif;">
-      <h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#1a1a1a;">Manage Categories</h3>
-      <p style="margin:0 0 16px;font-size:13px;color:#6b7280;">Categories appear as filter pills on the shop page.</p>
+      <h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#2D1A0A;">Manage Categories</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:#7A6050;">Categories appear as filter pills on the shop page.</p>
       <div style="display:flex;gap:8px;margin-bottom:18px;">
         <input id="new-cat-input" type="text" placeholder="New category name…"
           style="flex:1;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;"
@@ -168,16 +175,6 @@ window.openAddCategoryModal = function() {
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-
-  // FIX: Use event delegation on the list container instead of inline onclick
-  // with interpolated strings — prevents XSS from category names containing
-  // special characters like quotes, angle brackets, or JS keywords.
-  const listEl = modal.querySelector('#existing-cats-list');
-  listEl.addEventListener('click', e => {
-    const btn = e.target.closest('[data-del-cat]');
-    if (btn) window.deleteCategory(btn.dataset.delCat);
-  });
-
   document.getElementById('new-cat-input').focus();
   _refreshCatList();
 };
@@ -186,11 +183,10 @@ async function _refreshCatList() {
   const el = document.getElementById('existing-cats-list'); if (!el) return;
   const cats = await getAllCategories();
   if (cats.length === 0) { el.innerHTML = '<span style="font-size:13px;color:#bbb;">None yet</span>'; return; }
-  // FIX: Use data-del-cat attribute instead of inline onclick to avoid XSS
   el.innerHTML = cats.map(c => `
-    <span style="display:inline-flex;align-items:center;gap:4px;background:#f4f4f5;border-radius:20px;padding:5px 10px 5px 13px;font-size:13px;font-weight:600;color:#1a1a1a;">
-      ${escapeHtml(c)}
-      <button data-del-cat="${escapeHtml(c)}"
+    <span style="display:inline-flex;align-items:center;gap:4px;background:#f4f4f5;border-radius:20px;padding:5px 10px 5px 13px;font-size:13px;font-weight:600;color:#2D1A0A;">
+      ${c}
+      <button onclick="window.deleteCategory('${c.replace(/'/g,"\\'")}')"
         style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#bbb;padding:0 2px;" title="Remove">×</button>
     </span>`).join('');
 }
@@ -262,7 +258,7 @@ function renderCardsAdmin() {
   const container = document.getElementById('product-container-admin'); if (!container) return;
   _buildAdminCategoryBar();
   if (!products || products.length === 0) {
-    container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products. Add your first!</p>'; return;
+    container.innerHTML = '<p style="text-align:center;padding:40px;color:#7A6050;">No products. Add your first!</p>'; return;
   }
   const query    = _adminSearchQuery.trim().toLowerCase();
   const filtered = products.map((p, index) => ({ p, index })).filter(({ p }) => {
@@ -299,7 +295,7 @@ function _buildAdminCategoryBar() {
   const bar = document.getElementById('admin-category-bar'); if (!bar) return;
   const cats = ['All', ...new Set(products.map(p => p.category).filter(Boolean))].sort((a,b) => a==='All'?-1:b==='All'?1:a.localeCompare(b));
   bar.innerHTML = cats.map(cat =>
-    `<button class="cat-btn${cat===_adminActiveCategory?' active':''}" data-cat="${escapeHtml(cat)}" onclick="window.selectAdminCategory(this)">${escapeHtml(cat)}</button>`
+    `<button class="cat-btn${cat===_adminActiveCategory?' active':''}" data-cat="${cat}" onclick="window.selectAdminCategory(this)">${cat}</button>`
   ).join('');
 }
 window.selectAdminCategory = function(btn) { _adminActiveCategory = btn.dataset.cat; renderCardsAdmin(); };
@@ -320,7 +316,7 @@ window.clearAdminSearch = function() {
 function renderCardsCustomer() {
   const container = document.getElementById('product-container-customer'); if (!container) return;
   if (!products || products.length === 0) {
-    container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products available.</p>'; return;
+    container.innerHTML = '<p style="text-align:center;padding:40px;color:#7A6050;">No products available.</p>'; return;
   }
   _buildCategoryBar();
   const query    = _searchQuery.trim().toLowerCase();
@@ -356,7 +352,7 @@ function _buildCategoryBar() {
   const bar = document.getElementById('category-bar'); if (!bar) return;
   const cats = ['All', ...new Set(products.map(p => p.category).filter(Boolean))].sort((a,b) => a==='All'?-1:b==='All'?1:a.localeCompare(b));
   bar.innerHTML = cats.map(cat =>
-    `<button class="cat-btn${cat===_activeCategory?' active':''}" data-cat="${escapeHtml(cat)}" onclick="window.selectCategory(this)">${escapeHtml(cat)}</button>`
+    `<button class="cat-btn${cat===_activeCategory?' active':''}" data-cat="${cat}" onclick="window.selectCategory(this)">${cat}</button>`
   ).join('');
 }
 window.selectCategory = function(btn) { _activeCategory = btn.dataset.cat; renderCardsCustomer(); };
@@ -373,23 +369,20 @@ window.clearSearch = function() {
   renderCardsCustomer();
 };
 
-//  FIX: renderCardsHome — escape all Firestore-sourced values before DOM injection
+//  Render: Home 
 function renderCardsHome() {
   const container = document.getElementById('product-container-home'); if (!container) return;
   if (!products || products.length === 0) {
-    container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products available.</p>'; return;
+    container.innerHTML = '<p style="text-align:center;padding:40px;color:#7A6050;">No products available.</p>'; return;
   }
-  container.innerHTML = products.map((p) => {
-    const safeName = escapeHtml(p.name);
-    return `
+  container.innerHTML = products.map((p,i) => `
     <div class="card">
-      <img src="${p.img||'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${safeName}"
+      <img src="${p.img||'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${p.name}"
            onerror="this.src='https://placehold.co/400x300/f5f5f5/999?text=No+Image'">
-      <h4>${safeName}</h4><p>₦${p.price.toLocaleString()}</p>
+      <h4>${p.name}</h4><p>₦${p.price.toLocaleString()}</p>
       <p class="stock-label ${p.stock<=0?'out-of-stock':''}">${p.stock>0?`In Stock: ${p.stock}`:'Out of Stock'}</p>
       <button class="btn-buy" onclick="redirectToLoginPage()">Add To Cart</button>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
 //  Product CRUD 
@@ -486,10 +479,10 @@ function showLogoutWarning(n) {
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;';
   modal.innerHTML=`<div style="background:white;border-radius:16px;padding:32px 28px 24px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.18);font-family:'DM Sans','Segoe UI',sans-serif;text-align:center;">
     <div style="font-size:40px;margin-bottom:12px;"></div>
-    <h2 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:10px;">Your cart will be cleared</h2>
-    <p style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.5;">You have <strong>${n} item${n!==1?'s':''}</strong> in your cart. Logging out will clear it.</p>
+    <h2 style="font-size:18px;font-weight:700;color:#2D1A0A;margin-bottom:10px;">Your cart will be cleared</h2>
+    <p style="font-size:14px;color:#7A6050;margin-bottom:24px;line-height:1.5;">You have <strong>${n} item${n!==1?'s':''}</strong> in your cart. Logging out will clear it.</p>
     <div style="display:flex;gap:10px;">
-      <button id="lw-stay"    style="flex:1;padding:12px;background:white;color:#1a1a1a;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Stay</button>
+      <button id="lw-stay"    style="flex:1;padding:12px;background:white;color:#2D1A0A;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Stay</button>
       <button id="lw-confirm" style="flex:1;padding:12px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Logout anyway</button>
     </div></div>`;
   document.body.appendChild(modal);
@@ -518,6 +511,7 @@ window.renderCardsCustomer=renderCardsCustomer;
 function renderAll(){renderCardsAdmin();renderCardsCustomer();renderCardsHome();}
 window.products=products; window.loadProducts=loadProducts;
 
+// Called by the store picker (home.html) and by admin-auth-guard after storeId is confirmed
 window.reloadStoreProducts = async function() {
   try {
     products = await loadProducts();
@@ -527,6 +521,8 @@ window.reloadStoreProducts = async function() {
   } catch(e){ console.error('reloadStoreProducts error:', e); }
 };
 
+// Auto-init only on the customer page — admin and home pages control
+// their own load timing so products are never fetched before a store is set.
 function isAdminPage() {
   const path = window.location.pathname;
   return path.includes('admin.html') || path.includes('home.html');

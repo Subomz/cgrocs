@@ -125,10 +125,10 @@ function _renderDashboard(purchases, products) {
     setText('stat-lowstock', lowStockItems.length);
 
     const pendingEl = document.getElementById('stat-pending');
-    if (pendingEl) pendingEl.style.color = pendingOrders.length > 0 ? '#dc2626' : '#1a1a1a';
+    if (pendingEl) pendingEl.style.color = pendingOrders.length > 0 ? '#dc2626' : '#2D1A0A';
 
     const lowEl = document.getElementById('stat-lowstock');
-    if (lowEl) lowEl.style.color = lowStockItems.length > 0 ? '#d97706' : '#1a1a1a';
+    if (lowEl) lowEl.style.color = lowStockItems.length > 0 ? '#d97706' : '#2D1A0A';
 
     // Low-stock list
     const lowStockEl = document.getElementById('low-stock-list');
@@ -252,19 +252,19 @@ window.openCashierProfileModal = function() {
             </div>
             <div style="padding:28px 24px 24px;">
                 <div style="margin-bottom:16px;">
-                    <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Full Name</label>
+                    <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Full Name</label>
                     <input id="cp-name" type="text" value="${safeName}" placeholder="e.g. John Adeyemi"
                         style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s;"
                         onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
                 </div>
                 <div style="margin-bottom:24px;">
-                    <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Role</label>
+                    <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Role</label>
                     <input id="cp-role" type="text" value="${safeRole}" placeholder="e.g. Senior Cashier"
                         style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s;"
                         onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
                 </div>
                 <div style="display:flex;gap:10px;">
-                    <button onclick="document.getElementById('cashier-profile-modal').remove()" style="flex:1;padding:12px;background:white;color:#1a1a1a;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Cancel</button>
+                    <button onclick="document.getElementById('cashier-profile-modal').remove()" style="flex:1;padding:12px;background:white;color:#2D1A0A;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Cancel</button>
                     <button onclick="window.saveCashierProfile()" style="flex:1;padding:12px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Save</button>
                 </div>
             </div>
