@@ -595,7 +595,6 @@ window.reprintReceipt = function(purchaseId, storeId) {
   const customerEmail = escapeHtml(purchase.email         || '—');
   const cashierName   = escapeHtml(resolveCashierName(purchase));
   const purchaseId_s  = escapeHtml(purchase.id            || '—');
-  const reference_s   = escapeHtml(purchase.reference     || '—');
   const storeInfo     = escapeHtml(getStoreLabel(purchase._storeId) || '');
 
   const dateStr = purchase.date
@@ -783,14 +782,6 @@ window.reprintReceipt = function(purchaseId, storeId) {
       <div class="info-row" style="margin-top:8px;">
         <span class="info-label">Purchase ID</span>
         <span class="info-value mono">${purchaseId_s}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Reference</span>
-        <span class="info-value mono">${reference_s}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Status</span>
-        <span class="info-value">${purchase.verified ? 'Verified' : 'Pending'}</span>
       </div>
       ${verifiedRow}
     </div>

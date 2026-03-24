@@ -260,7 +260,6 @@ tbody tr:last-child td{border-bottom:none;}
   <div class="section-head">Order Info</div>
   <div class="info-row"><span class="info-label">Purchase ID</span><span class="info-value mono">${escapeHtml(purchase.id)}</span></div>
   <div class="info-row"><span class="info-label">Date</span><span class="info-value">${new Date(purchase.date).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
-  <div class="info-row"><span class="info-label">Reference</span><span class="info-value mono">${escapeHtml(purchase.reference || purchase.id || '\u2014')}</span></div>
   ${verifiedRows}
 </div>
 
