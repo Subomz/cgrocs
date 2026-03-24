@@ -1097,7 +1097,11 @@ window.verifyAndSaveStoreSubaccount = async function(storeId) {
 
     // Step 2: Create / update the Paystack subaccount
     btn.textContent = 'Saving…';
-    const saveResp = await _authedPost('/api/save-subaccount', { storeId, business_name, bank_code, account_number });
+    const saveResp = await fetch('/api/save-subaccount', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ storeId, business_name, bank_code, account_number })
+    });
     const res = await saveResp.json();
     if (!saveResp.ok) throw new Error(res.error || 'Could not save subaccount');
 
