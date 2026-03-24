@@ -589,49 +589,242 @@ window.reprintReceipt = function(purchaseId, storeId) {
   const purchase = ((_allPurchases[storeId||'store1'])||[]).find(p => p.id === purchaseId)
     || getAllPurchases().find(p => p.id === purchaseId);
   if (!purchase) { notify.error('Purchase not found.'); return; }
-  const customerName  = purchase.customerName  || purchase.email || 'Unknown';
-  const customerPhone = purchase.customerPhone || '—';
-  const customerEmail = purchase.email         || '—';
-  const cashierName   = resolveCashierName(purchase);
-  const storeInfo     = getStoreLabel(purchase._storeId) || '';
 
-  const printWindow = window.open('', '', 'width=800,height=700');
-  printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${purchase.id}</title>
-    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:28px;max-width:620px;margin:0 auto}
-    .rh{text-align:center;border-bottom:2px solid #111;padding-bottom:18px;margin-bottom:20px}
-    .rh h1{font-size:28px;font-weight:900}.rh h2{font-size:15px;color:#555;margin-top:4px}
-    .badge{display:inline-block;margin-top:10px;padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700}
-    .v-badge{background:#111;color:white}.p-badge{background:#f59e0b;color:white}
-    .sec{margin:18px 0}.sec-t{font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:10px;border-bottom:1px solid #eee;padding-bottom:6px}
-    .dr{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
-    table{width:100%;border-collapse:collapse;margin-top:6px}
-    th{background:#f5f5f5;padding:9px 10px;text-align:left;font-size:12px}
-    td{padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:14px}
-    .footer{text-align:center;margin-top:36px;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px}
-    </style></head><body>
-    <div class="rh"><h1>CGrocs</h1><h2>Purchase Receipt${storeInfo ? ` · ${storeInfo}` : ''}</h2>
-    ${purchase.verified?'<div class="badge v-badge"> VERIFIED</div>':'<div class="badge p-badge"> PENDING</div>'}
+  const customerName  = escapeHtml(purchase.customerName  || purchase.email || 'Unknown');
+  const customerPhone = escapeHtml(purchase.customerPhone || '—');
+  const customerEmail = escapeHtml(purchase.email         || '—');
+  const cashierName   = escapeHtml(resolveCashierName(purchase));
+  const purchaseId_s  = escapeHtml(purchase.id            || '—');
+  const reference_s   = escapeHtml(purchase.reference     || '—');
+  const storeInfo     = escapeHtml(getStoreLabel(purchase._storeId) || '');
+
+  const dateStr = purchase.date
+    ? new Date(purchase.date).toLocaleDateString('en-NG', {
+        day: 'numeric', month: 'long', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      }).toUpperCase()
+    : '—';
+
+  const items    = Array.isArray(purchase.items) ? purchase.items : [];
+  const charge   = purchase.serviceCharge || 0;
+  const subTotal = purchase.cartSubtotal  || (Number(purchase.total||0) - charge);
+
+  const itemRows = items.map(i => {
+    const price = Number(i.price)||0, qty = Number(i.quantity)||0;
+    return `<tr>
+      <td>${escapeHtml(i.name)}</td>
+      <td style="text-align:center;">${qty}</td>
+      <td style="text-align:right;">₦${price.toFixed(2)}</td>
+      <td style="text-align:right;">₦${(price*qty).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const chargeRows = charge > 0 ? `
+    <tr class="subtotal-row">
+      <td colspan="3" style="text-align:right;color:#7A6050;">Subtotal</td>
+      <td style="text-align:right;color:#7A6050;">₦${subTotal.toFixed(2)}</td>
+    </tr>
+    <tr class="subtotal-row">
+      <td colspan="3" style="text-align:right;color:#7A6050;">Convenience Fee</td>
+      <td style="text-align:right;color:#7A6050;">₦${charge.toFixed(2)}</td>
+    </tr>` : '';
+
+  const verifiedRow = purchase.verified ? `
+    <div class="info-row">
+      <span class="info-label">Verified At</span>
+      <span class="info-value">${escapeHtml(new Date(purchase.verifiedDate).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</span>
     </div>
-    <div class="sec"><div class="sec-t">Customer</div>
-      <div class="dr"><span>Name</span><span>${customerName}</span></div>
-      <div class="dr"><span>Phone</span><span>${customerPhone}</span></div>
-      <div class="dr"><span>Email</span><span>${customerEmail}</span></div></div>
-    <div class="sec"><div class="sec-t">Order Info</div>
-      <div class="dr"><span>Purchase ID</span><span style="font-family:monospace">${purchase.id}</span></div>
-      <div class="dr"><span>Date</span><span>${new Date(purchase.date).toLocaleString()}</span></div>
-      <div class="dr"><span>Reference</span><span style="font-family:monospace">${purchase.reference||'—'}</span></div>
-      ${purchase.verified?`<div class="dr"><span>Verified At</span><span>${new Date(purchase.verifiedDate).toLocaleString()}</span></div><div class="dr"><span>Verified By</span><span>${cashierName}</span></div>`:''}
+    <div class="info-row">
+      <span class="info-label">Verified By</span>
+      <span class="info-value">${cashierName}</span>
+    </div>` : '';
+
+  const printWindow = window.open('', '', 'width=800,height=950');
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CGrocs Receipt — ${purchaseId_s}</title>
+  <style>
+    *  { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #fff; color: #2D1A0A;
+      padding: 40px 48px; max-width: 640px; margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex; justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px; padding-bottom: 20px;
+      border-bottom: 2px solid #2D1A0A;
+    }
+    .brand-name  { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #2D1A0A; }
+    .brand-store { font-size: 13px; color: #7A6050; margin-top: 4px; }
+    .receipt-label {
+      text-align: right;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .1em; color: #7A6050;
+    }
+    .receipt-date { font-size: 13px; color: #2D1A0A; margin-top: 4px; }
+
+    /* ── Customer card ── */
+    .customer-card {
+      background: #f5ede4; border-radius: 12px;
+      padding: 20px 24px; margin-bottom: 28px;
+    }
+    .customer-card-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: #7A6050; margin-bottom: 12px;
+    }
+    .info-row {
+      display: flex; justify-content: space-between;
+      align-items: baseline; padding: 6px 0;
+      border-bottom: 1px solid rgba(107,63,31,0.12); font-size: 14px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label  { color: #7A6050; }
+    .info-value  { font-weight: 600; text-align: right; font-family: inherit; }
+    .info-value.mono { font-family: 'Courier New', monospace; font-size: 13px; }
+
+    /* ── Order info ── */
+    .order-card {
+      margin-bottom: 28px;
+      border: 1.5px solid #e4e4e7; border-radius: 12px;
+      overflow: hidden;
+    }
+    .order-card-head {
+      background: #2D1A0A; color: white;
+      padding: 12px 20px;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em;
+    }
+    .order-card-body { padding: 4px 20px 12px; }
+
+    /* ── Items table ── */
+    .items-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: #7A6050; margin-bottom: 10px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead tr { background: #2D1A0A; color: white; }
+    thead th {
+      padding: 10px 12px; font-weight: 700;
+      font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    }
+    thead th:first-child { text-align: left; border-radius: 6px 0 0 6px; }
+    thead th:last-child  { text-align: right; border-radius: 0 6px 6px 0; }
+    thead th:nth-child(2),
+    thead th:nth-child(3) { text-align: center; }
+    tbody tr td {
+      padding: 11px 12px; border-bottom: 1px solid #e4e4e7;
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody td:nth-child(2) { text-align: center; }
+    tbody td:nth-child(3),
+    tbody td:nth-child(4) { text-align: right; }
+    .subtotal-row td { padding: 8px 12px; font-size: 13px; }
+    .total-row td {
+      padding: 13px 12px; font-size: 16px; font-weight: 800;
+      border-top: 2px solid #2D1A0A !important;
+      color: #6B3F1F;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 32px; padding-top: 18px;
+      border-top: 1px solid #e4e4e7;
+      text-align: center; font-size: 12px; color: #7A6050; line-height: 1.8;
+    }
+
+    @media print {
+      body { padding: 20px; }
+      @page { margin: 12mm; size: A5 portrait; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="brand-name">CGrocs</div>
+      <div class="brand-store">${storeInfo}</div>
     </div>
-    <div class="sec"><div class="sec-t">Items</div>
-      <table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
-        ${(purchase.items||[]).map(i=>`<tr><td>${i.name}</td><td>${i.quantity}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
-      </tbody></table>
-      <table style="margin-top:8px"><tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
-        <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
-        <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
-      </tr></table></div>
-    <div class="footer"><p>Thank you for shopping with CGrocs!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
-    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+    <div class="receipt-label">
+      Purchase Receipt
+      <div class="receipt-date">${dateStr}</div>
+    </div>
+  </div>
+
+  <!-- Customer -->
+  <div class="customer-card">
+    <div class="customer-card-label">Customer</div>
+    <div class="info-row">
+      <span class="info-label">Name</span>
+      <span class="info-value">${customerName}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Phone</span>
+      <span class="info-value">${customerPhone}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Email</span>
+      <span class="info-value">${customerEmail}</span>
+    </div>
+  </div>
+
+  <!-- Order info -->
+  <div class="order-card">
+    <div class="order-card-head">Order Info</div>
+    <div class="order-card-body">
+      <div class="info-row" style="margin-top:8px;">
+        <span class="info-label">Purchase ID</span>
+        <span class="info-value mono">${purchaseId_s}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Reference</span>
+        <span class="info-value mono">${reference_s}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Status</span>
+        <span class="info-value">${purchase.verified ? 'Verified' : 'Pending'}</span>
+      </div>
+      ${verifiedRow}
+    </div>
+  </div>
+
+  <!-- Items -->
+  <div class="items-label">Items Purchased</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Qty</th>
+        <th>Unit Price</th>
+        <th style="text-align:right;">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemRows}
+      ${chargeRows}
+      <tr class="total-row">
+        <td colspan="3" style="text-align:right;">Total Paid</td>
+        <td style="text-align:right;">₦${Number(purchase.total||0).toFixed(2)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Thank you for shopping at CGrocs · ${storeInfo}<br>
+    Reprinted at ${new Date().toLocaleString('en-NG', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+  </div>
+
+  <script>window.onload = function() { window.print(); };<\/script>
+</body>
+</html>`);
   printWindow.document.close();
 };
 
