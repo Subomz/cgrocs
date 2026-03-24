@@ -268,23 +268,27 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-/** Update the withdrawal log entry status (best-effort, no transaction needed). */
+/**
+ * Update the withdrawal log entry status using a direct PATCH.
+ * No transaction needed — there are no reads, just a targeted field update.
+ * Using a transaction here adds overhead and leaves a hanging transaction
+ * if the commit throws (no rollback path in the original).
+ */
 async function _updateWithdrawalLog(token, projectId, base, uid, txLogId, status, transferCode, errorMessage) {
-  const updateTx = await fsBeginTransaction(token, projectId);
-  const fields   = { status, transferCode: transferCode || '' };
-  if (errorMessage) fields.errorMessage = String(errorMessage).slice(0, 500);
+  const fsFields = {
+    status:       { stringValue: status },
+    transferCode: { stringValue: transferCode || '' }
+  };
+  if (errorMessage) fsFields.errorMessage = { stringValue: String(errorMessage).slice(0, 500) };
 
-  await fsCommit(token, projectId, updateTx, [
-    {
-      update: {
-        name:   `${base}/users/${uid}/walletTransactions/${txLogId}`,
-        fields: Object.fromEntries(
-          Object.entries(fields).map(([k, v]) => [k, typeof v === 'string' ? { stringValue: v } : { nullValue: null }])
-        )
-      },
-      updateMask: { fieldPaths: Object.keys(fields) }
-    }
-  ]);
+  const maskPaths = Object.keys(fsFields)
+    .map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+
+  await fetch(`${base}/users/${uid}/walletTransactions/${txLogId}?${maskPaths}`, {
+    method:  'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ fields: fsFields })
+  });
 }
 
 export async function onRequestOptions() {

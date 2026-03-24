@@ -172,7 +172,7 @@ async function verifyPurchase(purchaseId) {
     resultDiv.className = 'verification-result error';
     resultDiv.innerHTML = `
       <div class="result-header error-header"><h3> Verification Error</h3></div>
-      <p>${error.message}</p>
+      <p>${escapeHtml(String(error.message || "An unexpected error occurred."))}</p>
       <button onclick="clearVerification()" class="btn-clear-result">Clear</button>`;
   }
 }
@@ -244,7 +244,7 @@ window.printReceipt = async function(purchaseId) {
           <td style="color:#6b7280;padding:8px 10px;">₦${Number(purchase.cartSubtotal != null ? purchase.cartSubtotal : (purchase.total - purchase.serviceCharge)).toFixed(2)}</td>
         </tr>
         <tr>
-          <td colspan="3" style="text-align:right;color:#6b7280;padding:4px 10px;">Service Charge</td>
+          <td colspan="3" style="text-align:right;color:#6b7280;padding:4px 10px;">Convenience Fee</td>
           <td style="color:#6b7280;padding:4px 10px;">₦${Number(purchase.serviceCharge).toFixed(2)}</td>
         </tr>` : ''}
         <tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
@@ -344,7 +344,7 @@ function renderPendingList() {
     const itemsText    = p.items ? p.items.map(i => `<span class="pend-item-pill">${escapeHtml(String(i.quantity))}× ${escapeHtml(i.name)}</span>`).join('') : '—';
     const customerName = escapeHtml(p.customerName || p.email || 'Unknown customer');
     return `
-    <div class="pending-card" id="pcard-${p._docId}">
+    <div class="pending-card" id="pcard-${p._docId.replace(/[^a-zA-Z0-9_-]/g,"")}">
       <div class="pend-top">
         <div class="pend-left">
           <div class="pend-customer">${customerName}</div>
