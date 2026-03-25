@@ -520,7 +520,7 @@ window.deleteAccount = function(uid, name) {
     try {
       const res  = await fetch('/api/delete-cashier', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await getAuthToken()}` },
         body:    JSON.stringify({ uid })
       });
       const data = await res.json();
@@ -1158,7 +1158,7 @@ window._deleteStore = function(id) {
           try {
             const res  = await fetch('/api/delete-store', {
               method:  'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await getAuthToken()}` },
               body:    JSON.stringify({ storeId: id })
             });
             const data = await res.json();
@@ -1352,7 +1352,7 @@ window._createHeadAdmin = async function() {
   try {
     const res  = await fetch('/api/create-head-admin', {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await getAuthToken()}` },
       body:    JSON.stringify({ name, email, password, role, storeId: role === 'general' ? null : storeId })
     });
     const data = await res.json();
@@ -1377,7 +1377,7 @@ window._deleteHeadAdmin = function(uid, name) {
     try {
       const res  = await fetch('/api/delete-head-admin', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await getAuthToken()}` },
         body:    JSON.stringify({ uid })
       });
       const data = await res.json();
