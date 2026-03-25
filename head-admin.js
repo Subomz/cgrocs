@@ -1,6 +1,6 @@
 // head-admin.js — Per-store & General Head Admin dashboard (multi-store)
 import { initializeApp, getApps }              from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut, getIdToken } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import { getFirestore, collection, onSnapshot, getDocs, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { headAdminConfig, adminConfig, customerConfig, storeCol, storeDoc, STORE_IDS, STORE_LABELS } from "./firebase-config.js";
 import { escapeHtml } from "./utils.js";
@@ -61,6 +61,13 @@ function refreshStoreDropdowns() {
     sel.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(getStoreLabel(id))}</option>`).join('');
     if (ids.includes(prev)) sel.value = prev;
   });
+}
+
+// Helper: get a fresh Firebase ID token for authenticated API calls
+async function getAuthToken() {
+  const user = adminAuth.currentUser;
+  if (!user) throw new Error('Not authenticated. Please refresh and log in again.');
+  return getIdToken(user, false);
 }
 
 //  State 
@@ -332,7 +339,7 @@ function renderPurchaseList(list) {
       ? `<span class="cashier-chip"><span class="cashier-dot"></span>${escapeHtml(resolveCashierName(p))}</span>`
       : `<span style="color:var(--muted);font-size:12px;">—</span>`;
     const storePill  = _currentRole === 'general'
-      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#7A6050;margin-left:4px;">${escapeHtml(storeLabel(p._storeId))}</span>` : '';
+      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:4px;">${escapeHtml(storeLabel(p._storeId))}</span>` : '';
     // Use data attributes instead of building onclick strings from DB values — prevents injection
     const actionBtn = p.verified
       ? `<button class="btn-reprint ha-btn-action" data-id="${escapeHtml(p.id||'')}" data-store="${escapeHtml(p._storeId||'store1')}">Print</button>`
@@ -393,7 +400,7 @@ function renderCashierGrid() {
     const initials  = c.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || '?';
     const isSelected = _selectedCashier === key;
     const storePills = _currentRole === 'general'
-      ? [...c.storeIds].map(s => `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#7A6050;">${escapeHtml(storeLabel(s))}</span>`).join('')
+      ? [...c.storeIds].map(s => `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;">${escapeHtml(storeLabel(s))}</span>`).join('')
       : '';
     return `
     <div class="cashier-summary-card${isSelected?' selected':''}" data-cashier-key="${escapeHtml(key)}">
@@ -442,7 +449,7 @@ function renderCashierDetail(key) {
     const amount = '₦' + (p.total ? p.total.toLocaleString('en-NG',{minimumFractionDigits:2}) : '0.00');
     const items  = (p.items||[]).map(i=>`${escapeHtml(String(i.quantity))}× ${escapeHtml(i.name)}`).join(', ') || '—';
     const storePill = _currentRole === 'general' && p._storeId
-      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#7A6050;margin-left:6px;">${escapeHtml(storeLabel(p._storeId))}</span>` : '';
+      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:6px;">${escapeHtml(storeLabel(p._storeId))}</span>` : '';
     return `
     <div class="list-row lr-cashier">
       <div class="row-id">${escapeHtml(p.id||'—')}${storePill}</div>
@@ -475,7 +482,7 @@ async function loadAccounts() {
     listEl.innerHTML = visible.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(a => {
       const isHead = a.role === 'Head Cashier' || a.role === 'Supervisor';
       const storePill = _currentRole === 'general' && a.storeId
-        ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#7A6050;margin-left:6px;">${escapeHtml(storeLabel(a.storeId))}</span>` : '';
+        ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-left:6px;">${escapeHtml(storeLabel(a.storeId))}</span>` : '';
       const canDelete = _currentRole === 'general' || _adminStores.includes(a.storeId || 'store1');
       return `
       <div class="account-row" id="acc-row-${escapeHtml(a.uid)}">
@@ -589,233 +596,60 @@ window.reprintReceipt = function(purchaseId, storeId) {
   const purchase = ((_allPurchases[storeId||'store1'])||[]).find(p => p.id === purchaseId)
     || getAllPurchases().find(p => p.id === purchaseId);
   if (!purchase) { notify.error('Purchase not found.'); return; }
+  const customerName  = purchase.customerName  || purchase.email || 'Unknown';
+  const customerPhone = purchase.customerPhone || '—';
+  const customerEmail = purchase.email         || '—';
+  const cashierName   = resolveCashierName(purchase);
+  const storeInfo     = getStoreLabel(purchase._storeId) || '';
 
-  const customerName  = escapeHtml(purchase.customerName  || purchase.email || 'Unknown');
-  const customerPhone = escapeHtml(purchase.customerPhone || '—');
-  const customerEmail = escapeHtml(purchase.email         || '—');
-  const cashierName   = escapeHtml(resolveCashierName(purchase));
-  const purchaseId_s  = escapeHtml(purchase.id            || '—');
-  const storeInfo     = escapeHtml(getStoreLabel(purchase._storeId) || '');
-
-  const dateStr = purchase.date
-    ? new Date(purchase.date).toLocaleDateString('en-NG', {
-        day: 'numeric', month: 'long', year: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      }).toUpperCase()
-    : '—';
-
-  const items    = Array.isArray(purchase.items) ? purchase.items : [];
-  const charge   = purchase.serviceCharge || 0;
-  const subTotal = purchase.cartSubtotal  || (Number(purchase.total||0) - charge);
-
-  const itemRows = items.map(i => {
-    const price = Number(i.price)||0, qty = Number(i.quantity)||0;
-    return `<tr>
-      <td>${escapeHtml(i.name)}</td>
-      <td style="text-align:center;">${qty}</td>
-      <td style="text-align:right;">₦${price.toFixed(2)}</td>
-      <td style="text-align:right;">₦${(price*qty).toFixed(2)}</td>
-    </tr>`;
-  }).join('');
-
-  const chargeRows = charge > 0 ? `
-    <tr class="subtotal-row">
-      <td colspan="3" style="text-align:right;color:#7A6050;">Subtotal</td>
-      <td style="text-align:right;color:#7A6050;">₦${subTotal.toFixed(2)}</td>
-    </tr>
-    <tr class="subtotal-row">
-      <td colspan="3" style="text-align:right;color:#7A6050;">Convenience Fee</td>
-      <td style="text-align:right;color:#7A6050;">₦${charge.toFixed(2)}</td>
-    </tr>` : '';
-
-  const verifiedRow = purchase.verified ? `
-    <div class="info-row">
-      <span class="info-label">Verified At</span>
-      <span class="info-value">${escapeHtml(new Date(purchase.verifiedDate).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</span>
+  const printWindow = window.open('', '', 'width=800,height=700');
+  printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt - ${purchase.id}</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:28px;max-width:620px;margin:0 auto}
+    .rh{text-align:center;border-bottom:2px solid #111;padding-bottom:18px;margin-bottom:20px}
+    .rh h1{font-size:28px;font-weight:900}.rh h2{font-size:15px;color:#555;margin-top:4px}
+    .badge{display:inline-block;margin-top:10px;padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700}
+    .v-badge{background:#111;color:white}.p-badge{background:#f59e0b;color:white}
+    .sec{margin:18px 0}.sec-t{font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:10px;border-bottom:1px solid #eee;padding-bottom:6px}
+    .dr{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
+    table{width:100%;border-collapse:collapse;margin-top:6px}
+    th{background:#f5f5f5;padding:9px 10px;text-align:left;font-size:12px}
+    td{padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:14px}
+    .footer{text-align:center;margin-top:36px;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px}
+    </style></head><body>
+    <div class="rh"><h1>CGrocs</h1><h2>Purchase Receipt${storeInfo ? ` · ${storeInfo}` : ''}</h2>
+    ${purchase.verified?'<div class="badge v-badge"> VERIFIED</div>':'<div class="badge p-badge"> PENDING</div>'}
     </div>
-    <div class="info-row">
-      <span class="info-label">Verified By</span>
-      <span class="info-value">${cashierName}</span>
-    </div>` : '';
-
-  const printWindow = window.open('', '', 'width=800,height=950');
-  printWindow.document.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>CGrocs Receipt — ${purchaseId_s}</title>
-  <style>
-    *  { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: #fff; color: #2D1A0A;
-      padding: 40px 48px; max-width: 640px; margin: 0 auto;
-    }
-
-    /* ── Header ── */
-    .header {
-      display: flex; justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 28px; padding-bottom: 20px;
-      border-bottom: 2px solid #2D1A0A;
-    }
-    .brand-name  { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #2D1A0A; }
-    .brand-store { font-size: 13px; color: #7A6050; margin-top: 4px; }
-    .receipt-label {
-      text-align: right;
-      font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .1em; color: #7A6050;
-    }
-    .receipt-date { font-size: 13px; color: #2D1A0A; margin-top: 4px; }
-
-    /* ── Customer card ── */
-    .customer-card {
-      background: #f5ede4; border-radius: 12px;
-      padding: 20px 24px; margin-bottom: 28px;
-    }
-    .customer-card-label {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .08em; color: #7A6050; margin-bottom: 12px;
-    }
-    .info-row {
-      display: flex; justify-content: space-between;
-      align-items: baseline; padding: 6px 0;
-      border-bottom: 1px solid rgba(107,63,31,0.12); font-size: 14px;
-    }
-    .info-row:last-child { border-bottom: none; }
-    .info-label  { color: #7A6050; }
-    .info-value  { font-weight: 600; text-align: right; font-family: inherit; }
-    .info-value.mono { font-family: 'Courier New', monospace; font-size: 13px; }
-
-    /* ── Order info ── */
-    .order-card {
-      margin-bottom: 28px;
-      border: 1.5px solid #e4e4e7; border-radius: 12px;
-      overflow: hidden;
-    }
-    .order-card-head {
-      background: #2D1A0A; color: white;
-      padding: 12px 20px;
-      font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .08em;
-    }
-    .order-card-body { padding: 4px 20px 12px; }
-
-    /* ── Items table ── */
-    .items-label {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .08em; color: #7A6050; margin-bottom: 10px;
-    }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    thead tr { background: #2D1A0A; color: white; }
-    thead th {
-      padding: 10px 12px; font-weight: 700;
-      font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-    }
-    thead th:first-child { text-align: left; border-radius: 6px 0 0 6px; }
-    thead th:last-child  { text-align: right; border-radius: 0 6px 6px 0; }
-    thead th:nth-child(2),
-    thead th:nth-child(3) { text-align: center; }
-    tbody tr td {
-      padding: 11px 12px; border-bottom: 1px solid #e4e4e7;
-      vertical-align: middle;
-    }
-    tbody tr:last-child td { border-bottom: none; }
-    tbody td:nth-child(2) { text-align: center; }
-    tbody td:nth-child(3),
-    tbody td:nth-child(4) { text-align: right; }
-    .subtotal-row td { padding: 8px 12px; font-size: 13px; }
-    .total-row td {
-      padding: 13px 12px; font-size: 16px; font-weight: 800;
-      border-top: 2px solid #2D1A0A !important;
-      color: #6B3F1F;
-    }
-
-    /* ── Footer ── */
-    .footer {
-      margin-top: 32px; padding-top: 18px;
-      border-top: 1px solid #e4e4e7;
-      text-align: center; font-size: 12px; color: #7A6050; line-height: 1.8;
-    }
-
-    @media print {
-      body { padding: 20px; }
-      @page { margin: 12mm; size: A5 portrait; }
-    }
-  </style>
-</head>
-<body>
-
-  <!-- Header -->
-  <div class="header">
-    <div>
-      <div class="brand-name">CGrocs</div>
-      <div class="brand-store">${storeInfo}</div>
+    <div class="sec"><div class="sec-t">Customer</div>
+      <div class="dr"><span>Name</span><span>${customerName}</span></div>
+      <div class="dr"><span>Phone</span><span>${customerPhone}</span></div>
+      <div class="dr"><span>Email</span><span>${customerEmail}</span></div></div>
+    <div class="sec"><div class="sec-t">Order Info</div>
+      <div class="dr"><span>Purchase ID</span><span style="font-family:monospace">${purchase.id}</span></div>
+      <div class="dr"><span>Date</span><span>${new Date(purchase.date).toLocaleString()}</span></div>
+      <div class="dr"><span>Reference</span><span style="font-family:monospace">${purchase.reference||'—'}</span></div>
+      ${purchase.verified?`<div class="dr"><span>Verified At</span><span>${new Date(purchase.verifiedDate).toLocaleString()}</span></div><div class="dr"><span>Verified By</span><span>${cashierName}</span></div>`:''}
     </div>
-    <div class="receipt-label">
-      Purchase Receipt
-      <div class="receipt-date">${dateStr}</div>
-    </div>
-  </div>
-
-  <!-- Customer -->
-  <div class="customer-card">
-    <div class="customer-card-label">Customer</div>
-    <div class="info-row">
-      <span class="info-label">Name</span>
-      <span class="info-value">${customerName}</span>
-    </div>
-    <div class="info-row">
-      <span class="info-label">Phone</span>
-      <span class="info-value">${customerPhone}</span>
-    </div>
-    <div class="info-row">
-      <span class="info-label">Email</span>
-      <span class="info-value">${customerEmail}</span>
-    </div>
-  </div>
-
-  <!-- Order info -->
-  <div class="order-card">
-    <div class="order-card-head">Order Info</div>
-    <div class="order-card-body">
-      <div class="info-row" style="margin-top:8px;">
-        <span class="info-label">Purchase ID</span>
-        <span class="info-value mono">${purchaseId_s}</span>
-      </div>
-      ${verifiedRow}
-    </div>
-  </div>
-
-  <!-- Items -->
-  <div class="items-label">Items Purchased</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Item</th>
-        <th>Qty</th>
-        <th>Unit Price</th>
-        <th style="text-align:right;">Subtotal</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itemRows}
-      ${chargeRows}
-      <tr class="total-row">
-        <td colspan="3" style="text-align:right;">Total Paid</td>
-        <td style="text-align:right;">₦${Number(purchase.total||0).toFixed(2)}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="footer">
-    Thank you for shopping at CGrocs · ${storeInfo}<br>
-    Reprinted at ${new Date().toLocaleString('en-NG', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
-  </div>
-
-  <script>window.onload = function() { window.print(); };<\/script>
-</body>
-</html>`);
+    <div class="sec"><div class="sec-t">Items</div>
+      <table><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
+        ${(purchase.items||[]).map(i=>`<tr><td>${i.name}</td><td>${i.quantity}</td><td>₦${Number(i.price).toFixed(2)}</td><td>₦${(i.quantity*Number(i.price)).toFixed(2)}</td></tr>`).join('')}
+      </tbody></table>
+      <table style="margin-top:8px">
+        ${(purchase.serviceCharge && purchase.serviceCharge > 0) ? `
+        <tr style="border-top:1px solid #eee;">
+          <td colspan="3" style="text-align:right;color:#6b7280;padding:8px 10px;">Subtotal</td>
+          <td style="color:#6b7280;padding:8px 10px;">₦${Number(purchase.cartSubtotal != null ? purchase.cartSubtotal : (purchase.total - purchase.serviceCharge)).toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align:right;color:#6b7280;padding:4px 10px;">Service Charge</td>
+          <td style="color:#6b7280;padding:4px 10px;">₦${Number(purchase.serviceCharge).toFixed(2)}</td>
+        </tr>` : ''}
+        <tr style="font-size:18px;font-weight:800;border-top:2px solid #111">
+          <td colspan="3" style="text-align:right;font-weight:700;padding:12px 10px">Total</td>
+          <td style="padding:12px 10px">₦${Number(purchase.total||0).toFixed(2)}</td>
+        </tr>
+      </table></div>
+    <div class="footer"><p>Thank you for shopping with CGrocs!</p><p style="margin-top:4px">Reprinted at ${new Date().toLocaleString()}</p></div>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
   printWindow.document.close();
 };
 
@@ -890,7 +724,7 @@ function renderProductLogs(list) {
         ? `<span class="badge" style="background:#fee2e2;color:#dc2626;">Deleted</span>`
         : `<span class="badge" style="background:#fef9c3;color:#92400e;">Edited</span>`;
     const storePill  = _currentRole === 'general' && log._storeId
-      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#7A6050;margin-top:4px;display:inline-block;">${escapeHtml(storeLabel(log._storeId))}</span>` : '';
+      ? `<span style="font-size:11px;background:#f4f4f5;border-radius:20px;padding:2px 8px;color:#6b7280;margin-top:4px;display:inline-block;">${escapeHtml(storeLabel(log._storeId))}</span>` : '';
     const changesHtml = (log.changes && log.changes.length > 0)
       ? log.changes.map(c=>`<div class="prod-change-row"><span class="prod-change-field">${escapeHtml(c.field)}</span><span class="prod-change-from">${escapeHtml(String(c.from))}</span><span class="prod-change-arrow">→</span><span class="prod-change-to">${escapeHtml(String(c.to))}</span></div>`).join('')
       : `<span style="color:var(--muted);font-size:12px;">${isAdd ? 'New product' : isDelete ? 'Product removed' : '—'}</span>`;
@@ -973,10 +807,10 @@ window.openStoreBankSettings = async function() {
 
   const modal = document.createElement('div');
   modal.id = 'store-bank-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:580px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:580px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h2 style="margin:0;font-size:18px;font-weight:700;">Store Bank Accounts</h2>
@@ -988,13 +822,13 @@ window.openStoreBankSettings = async function() {
       <div style="padding:28px 24px;display:flex;flex-direction:column;gap:32px;">
         ${storesToShow.map(storeId => `
         <div>
-          <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7A6050;margin-bottom:6px;padding-bottom:8px;border-bottom:1.5px solid #e4e4e7;">
+          <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin-bottom:6px;padding-bottom:8px;border-bottom:1.5px solid #e4e4e7;">
             ${escapeHtml(getStoreLabel(storeId))}
           </div>
-          <div id="sbs-status-${storeId}" style="font-size:13px;color:#7A6050;margin-bottom:14px;min-height:18px;"></div>
+          <div id="sbs-status-${storeId}" style="font-size:13px;color:#6b7280;margin-bottom:14px;min-height:18px;"></div>
 
           <div style="margin-bottom:12px;">
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Business / Account Name</label>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Business / Account Name</label>
             <input type="text" id="sbs-biz-${storeId}" placeholder="e.g. CGrocs Store One"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
@@ -1002,7 +836,7 @@ window.openStoreBankSettings = async function() {
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
             <div>
-              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Bank</label>
+              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Bank</label>
               <select id="sbs-bank-${storeId}"
                 style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;"
                 onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
@@ -1011,7 +845,7 @@ window.openStoreBankSettings = async function() {
               </select>
             </div>
             <div>
-              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Account Number</label>
+              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Account Number</label>
               <input type="text" id="sbs-acct-${storeId}" maxlength="10" placeholder="0123456789"
                 style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:'DM Mono','Courier New',monospace;outline:none;"
                 onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
@@ -1020,7 +854,7 @@ window.openStoreBankSettings = async function() {
 
           <div style="display:flex;gap:10px;align-items:flex-end;">
             <div style="flex:1;">
-              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Verified Account Name</label>
+              <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Verified Account Name</label>
               <input type="text" id="sbs-name-${storeId}" placeholder="Tap Verify &amp; Save to confirm"
                 style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:#fafafa;" readonly>
             </div>
@@ -1080,13 +914,16 @@ window.verifyAndSaveStoreSubaccount = async function(storeId) {
   if (!account_number || account_number.length < 10) { notify.warning('Please enter a valid 10-digit account number.'); return; }
 
   btn.disabled = true; btn.textContent = 'Verifying…';
-  if (stEl) { stEl.textContent = 'Verifying account number…'; stEl.style.color = '#7A6050'; }
+  if (stEl) { stEl.textContent = 'Verifying account number…'; stEl.style.color = '#6b7280'; }
 
   try {
+    // Get Firebase ID token once — reused for both API calls
+    const idToken = await getAuthToken();
+
     // Step 1: Confirm the account number is real
     const verifyResp = await fetch('/api/verify-account', {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
       body:    JSON.stringify({ account_number, bank_code })
     });
     const verifyData = await verifyResp.json();
@@ -1099,7 +936,7 @@ window.verifyAndSaveStoreSubaccount = async function(storeId) {
     btn.textContent = 'Saving…';
     const saveResp = await fetch('/api/save-subaccount', {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
       body:    JSON.stringify({ storeId, business_name, bank_code, account_number })
     });
     const res = await saveResp.json();
@@ -1151,10 +988,10 @@ window.openStoreManagement = async function() {
 
   const modal = document.createElement('div');
   modal.id = 'store-mgmt-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h2 style="margin:0;font-size:18px;font-weight:700;">Manage Stores</h2>
@@ -1166,7 +1003,7 @@ window.openStoreManagement = async function() {
       <div style="padding:24px;">
         <div id="store-mgmt-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;"></div>
         <div style="border-top:1.5px solid #e4e4e7;padding-top:20px;">
-          <div style="font-size:13px;font-weight:700;color:#2D1A0A;margin-bottom:12px;">Add New Store</div>
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:12px;">Add New Store</div>
           <div style="display:flex;gap:8px;">
             <input id="new-store-name" type="text" placeholder="e.g. Store 3 — Third Branch"
               style="flex:1;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
@@ -1191,12 +1028,12 @@ function _renderStoreMgmtList() {
   if (!el) return;
   const ids = getStoreIds();
   if (ids.length === 0) {
-    el.innerHTML = '<p style="font-size:13px;color:#7A6050;text-align:center;">No stores yet.</p>';
+    el.innerHTML = '<p style="font-size:13px;color:#6b7280;text-align:center;">No stores yet.</p>';
     return;
   }
   el.innerHTML = ids.map(id => `
     <div id="store-row-${escapeHtml(id)}" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
-      <span style="font-size:13px;font-weight:600;color:#2D1A0A;flex:1;" id="store-lbl-${escapeHtml(id)}">${escapeHtml(getStoreLabel(id))}</span>
+      <span style="font-size:13px;font-weight:600;color:#1a1a1a;flex:1;" id="store-lbl-${escapeHtml(id)}">${escapeHtml(getStoreLabel(id))}</span>
       <span style="font-size:11px;color:#9ca3af;font-family:monospace;">${escapeHtml(id)}</span>
       <button class="ha-btn-store-edit" data-storeid="${escapeHtml(id)}"
         style="padding:5px 12px;background:white;border:1.5px solid #e4e4e7;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151;">
@@ -1315,7 +1152,7 @@ window._deleteStore = function(id) {
           // Show a progress indicator in the store row while deleting
           const row = document.getElementById(`store-row-${id}`);
           if (row) {
-            row.innerHTML = `<span style="font-size:13px;color:#7A6050;padding:4px 0;">Deleting all data for ${label}…</span>`;
+            row.innerHTML = `<span style="font-size:13px;color:#6b7280;padding:4px 0;">Deleting all data for ${label}…</span>`;
           }
 
           try {
@@ -1356,12 +1193,12 @@ window.openHeadAdminManagement = async function() {
 
   const modal = document.createElement('div');
   modal.id = 'ha-mgmt-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
 
   const storeOptions = getStoreIds().map(id => `<option value="${id}">${getStoreLabel(id)}</option>`).join('');
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h2 style="margin:0;font-size:18px;font-weight:700;">Head Admin Accounts</h2>
@@ -1373,16 +1210,16 @@ window.openHeadAdminManagement = async function() {
 
       <!-- Create form -->
       <div style="padding:22px 24px 0;">
-        <div style="font-size:13px;font-weight:700;color:#2D1A0A;margin-bottom:14px;">Create New Head Admin</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:14px;">Create New Head Admin</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Full Name</label>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Full Name</label>
             <input id="ha-new-name" type="text" placeholder="Jane Doe" autocomplete="off"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
           <div>
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Role</label>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Role</label>
             <select id="ha-new-role" onchange="window._toggleHaStoreField()"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
@@ -1392,7 +1229,7 @@ window.openHeadAdminManagement = async function() {
           </div>
         </div>
         <div id="ha-store-field" style="margin-bottom:12px;">
-          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Assigned Store</label>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Assigned Store</label>
           <select id="ha-new-store"
             style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
             onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
@@ -1401,24 +1238,16 @@ window.openHeadAdminManagement = async function() {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Email</label>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Email</label>
             <input id="ha-new-email" type="email" placeholder="jane@cloexstore.com" autocomplete="off"
               style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
               onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
           <div>
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Password</label>
-            <div style="position:relative;">
-              <input id="ha-new-password" type="password" placeholder="At least 6 characters" autocomplete="new-password"
-                style="width:100%;padding:10px 52px 10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
-                onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
-              <button type="button" id="ha-pw-toggle" onclick="(function(){var i=document.getElementById('ha-new-password'),b=document.getElementById('ha-pw-toggle'),s=i.type==='password';i.type=s?'text':'password';b.innerHTML=s?'<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;18&quot; height=&quot;18&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;><path d=&quot;M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z&quot;/><circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;3&quot;/></svg>':'<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;18&quot; height=&quot;18&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;><path d=&quot;M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94&quot;/><path d=&quot;M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19&quot;/><line x1=&quot;1&quot; y1=&quot;1&quot; x2=&quot;23&quot; y2=&quot;23&quot;/></svg>';b.setAttribute('aria-label',s?'Hide password':'Show password');})()"
-                aria-label="Show password"
-                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;padding:2px;display:flex;align-items:center;justify-content:center;color:#7A6050;cursor:pointer;line-height:0;transition:color .2s;"
-                onmouseover="this.style.color='#0a0a0a'" onmouseout="this.style.color='#7A6050'">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              </button>
-            </div>
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Password</label>
+            <input id="ha-new-password" type="password" placeholder="At least 6 characters" autocomplete="new-password"
+              style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
+              onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
           </div>
         </div>
         <button id="ha-create-btn" onclick="window._createHeadAdmin()"
@@ -1429,9 +1258,9 @@ window.openHeadAdminManagement = async function() {
 
       <!-- Existing head admins list -->
       <div style="border-top:1.5px solid #e4e4e7;padding:18px 24px 24px;">
-        <div style="font-size:13px;font-weight:700;color:#2D1A0A;margin-bottom:14px;">Existing Head Admins</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:14px;">Existing Head Admins</div>
         <div id="ha-list" style="display:flex;flex-direction:column;gap:8px;">
-          <p style="font-size:13px;color:#7A6050;">Loading…</p>
+          <p style="font-size:13px;color:#6b7280;">Loading…</p>
         </div>
       </div>
     </div>`;
@@ -1468,7 +1297,7 @@ window._loadHeadAdminList = async function() {
     });
 
     if (admins.length === 0) {
-      listEl.innerHTML = '<p style="font-size:13px;color:#7A6050;">No head admins yet.</p>';
+      listEl.innerHTML = '<p style="font-size:13px;color:#6b7280;">No head admins yet.</p>';
       return;
     }
 
@@ -1479,8 +1308,8 @@ window._loadHeadAdminList = async function() {
       return `
       <div id="ha-row-${escapeHtml(a.uid)}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:1.5px solid #e4e4e7;">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:700;color:#2D1A0A;">${escapeHtml(a.name||'—')}</div>
-          <div style="font-size:12px;color:#7A6050;">${escapeHtml(a.email||'—')}</div>
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">${escapeHtml(a.name||'—')}</div>
+          <div style="font-size:12px;color:#6b7280;">${escapeHtml(a.email||'—')}</div>
         </div>
         ${rolePill}
         <button class="ha-btn-edit-ha" data-uid="${escapeHtml(a.uid||'')}"
@@ -1583,10 +1412,10 @@ window._openEditHeadAdmin = async function(uid) {
 
   const modal = document.createElement('div');
   modal.id = 'ha-edit-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:100000;padding:16px;overflow-y:auto;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:100000;padding:16px;';
 
   modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
+    <div style="background:white;border-radius:16px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;">
       <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
         <h2 style="margin:0;font-size:17px;font-weight:700;">Edit Head Admin</h2>
         <button onclick="document.getElementById('ha-edit-modal').remove()"
@@ -1594,13 +1423,13 @@ window._openEditHeadAdmin = async function(uid) {
       </div>
       <div style="padding:24px;display:flex;flex-direction:column;gap:14px;">
         <div>
-          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Full Name</label>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Full Name</label>
           <input id="hae-name" type="text" value="${escapeHtml(profileData.name||'')}"
             style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;"
             onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
         </div>
         <div>
-          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Role</label>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Role</label>
           <select id="hae-role" onchange="window._toggleHaeStoreField()"
             style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
             onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
@@ -1609,7 +1438,7 @@ window._openEditHeadAdmin = async function(uid) {
           </select>
         </div>
         <div id="hae-store-field" style="${adminData.role === 'general' ? 'display:none' : ''}">
-          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Assigned Store</label>
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;">Assigned Store</label>
           <select id="hae-store"
             style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;box-sizing:border-box;"
             onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
@@ -1618,7 +1447,7 @@ window._openEditHeadAdmin = async function(uid) {
         </div>
         <div style="display:flex;gap:10px;margin-top:4px;">
           <button onclick="document.getElementById('ha-edit-modal').remove()"
-            style="flex:1;padding:11px;background:white;color:#2D1A0A;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
+            style="flex:1;padding:11px;background:white;color:#1a1a1a;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
             Cancel
           </button>
           <button id="hae-save-btn" onclick="window._saveEditHeadAdmin('${uid}')"
@@ -1664,148 +1493,5 @@ window._saveEditHeadAdmin = async function(uid) {
   } catch (e) {
     notify.error('Could not save: ' + e.message);
     btn.disabled = false; btn.textContent = 'Save Changes';
-  }
-};
-
-// ── COPY PRODUCTS (general admin only) ───────────────────────────────────────
-
-window.openCopyProductsModal = function() {
-  const existing = document.getElementById('copy-products-modal');
-  if (existing) existing.remove();
-
-  const storeIds    = getStoreIds();
-  const storeOptions = storeIds.map(id =>
-    `<option value="${escapeHtml(id)}">${escapeHtml(getStoreLabel(id))}</option>`
-  ).join('');
-
-  const modal = document.createElement('div');
-  modal.id = 'copy-products-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;padding:16px;overflow-y:auto;';
-
-  modal.innerHTML = `
-    <div style="background:white;border-radius:16px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,0.2);font-family:'DM Sans','Segoe UI',sans-serif;overflow:hidden;margin:auto;align-self:flex-start;">
-
-      <!-- Header -->
-      <div style="background:#0a0a0a;color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <h2 style="margin:0;font-size:18px;font-weight:700;">Copy Products</h2>
-          <p style="margin:3px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">Copy all products from one store to another</p>
-        </div>
-        <button onclick="document.getElementById('copy-products-modal').remove()"
-          style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;">&#215;</button>
-      </div>
-
-      <!-- Body -->
-      <div style="padding:28px 24px 24px;display:flex;flex-direction:column;gap:18px;">
-
-        <div style="background:#f4f4f5;border-radius:10px;padding:14px 16px;font-size:13px;color:#7A6050;line-height:1.6;">
-          ⚠️ This will <strong style="color:#0a0a0a;">add</strong> all products from the source store into the destination store.
-          Existing products in the destination store will <strong style="color:#0a0a0a;">not</strong> be deleted or overwritten.
-        </div>
-
-        <div>
-          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Copy From (Source)</label>
-          <select id="copy-from-store"
-            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;"
-            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
-            ${storeOptions}
-          </select>
-        </div>
-
-        <div style="display:flex;align-items:center;justify-content:center;color:#7A6050;font-size:20px;">↓</div>
-
-        <div>
-          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7A6050;margin-bottom:6px;">Copy To (Destination)</label>
-          <select id="copy-to-store"
-            style="width:100%;padding:10px 13px;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:white;"
-            onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#e4e4e7'">
-            ${storeOptions}
-          </select>
-        </div>
-
-        <div id="copy-products-result" style="display:none;"></div>
-
-        <div style="display:flex;gap:10px;margin-top:4px;">
-          <button onclick="document.getElementById('copy-products-modal').remove()"
-            style="flex:1;padding:12px;background:white;color:#111;border:1.5px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
-            Cancel
-          </button>
-          <button id="copy-products-btn" onclick="window._executeCopyProducts()"
-            style="flex:2;padding:12px;background:#0a0a0a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">
-            Copy Products
-          </button>
-        </div>
-      </div>
-    </div>`;
-
-  document.body.appendChild(modal);
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-
-  // Default second store to a different option if possible
-  const toSelect = document.getElementById('copy-to-store');
-  if (storeIds.length > 1) toSelect.value = storeIds[1];
-};
-
-window._executeCopyProducts = async function() {
-  const fromId  = document.getElementById('copy-from-store')?.value;
-  const toId    = document.getElementById('copy-to-store')?.value;
-  const btn     = document.getElementById('copy-products-btn');
-  const result  = document.getElementById('copy-products-result');
-
-  if (!fromId || !toId) {
-    notify.error('Please select both stores.'); return;
-  }
-  if (fromId === toId) {
-    notify.error('Source and destination stores must be different.'); return;
-  }
-
-  btn.disabled    = true;
-  btn.textContent = 'Copying…';
-  result.style.display = 'none';
-
-  try {
-    // Read all products from source store
-    const sourceSnap = await getDocs(collection(custDb, storeCol(fromId, 'products')));
-
-    if (sourceSnap.empty) {
-      notify.warning(`No products found in ${getStoreLabel(fromId)}.`);
-      btn.disabled    = false;
-      btn.textContent = 'Copy Products';
-      return;
-    }
-
-    // Write each product to destination store using its original document ID
-    // so re-running this is safe — same doc ID = overwrite, not duplicate
-    const writes = sourceSnap.docs.map(d =>
-      setDoc(
-        doc(custDb, storeCol(toId, 'products'), d.id),
-        { ...d.data(), _copiedFrom: fromId, _copiedAt: new Date().toISOString() },
-        { merge: false }
-      )
-    );
-
-    await Promise.all(writes);
-
-    const count = sourceSnap.docs.length;
-    result.style.display = '';
-    result.innerHTML = `
-      <div style="background:#dcfce7;border-radius:8px;padding:12px 16px;font-size:13px;color:#16a34a;font-weight:600;">
-        ✓ Successfully copied ${count} product${count !== 1 ? 's' : ''} from
-        <strong>${escapeHtml(getStoreLabel(fromId))}</strong> to
-        <strong>${escapeHtml(getStoreLabel(toId))}</strong>.
-      </div>`;
-
-    btn.textContent = 'Done';
-    notify.success(`${count} product${count !== 1 ? 's' : ''} copied to ${getStoreLabel(toId)}!`);
-
-  } catch (e) {
-    console.error('[copy-products]', e);
-    result.style.display = '';
-    result.innerHTML = `
-      <div style="background:#fee2e2;border-radius:8px;padding:12px 16px;font-size:13px;color:#dc2626;font-weight:600;">
-        ✗ Copy failed: ${escapeHtml(e.message)}
-      </div>`;
-    btn.disabled    = false;
-    btn.textContent = 'Try Again';
   }
 };
