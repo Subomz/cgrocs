@@ -52,6 +52,14 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
+// Wallet convenience fee tiers (lower than Paystack as an incentive to use wallet)
+function getWalletServiceCharge(cartTotal) {
+  if (cartTotal < 1000)  return 30;
+  if (cartTotal < 10000) return 80;
+  if (cartTotal < 50000) return 130;
+  return 180;
+}
+
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json().catch(() => null);
@@ -137,7 +145,11 @@ export async function onRequestPost({ request, env }) {
         );
       }
 
-      if (before < total) {
+      // Calculate wallet convenience fee server-side
+      const serviceCharge = getWalletServiceCharge(total);
+      const grandTotal    = total + serviceCharge;
+
+      if (before < grandTotal) {
         await fsRollback(token, projectId, tx);
         return Response.json(
           { error: 'Insufficient wallet balance', balance: before },
@@ -145,7 +157,7 @@ export async function onRequestPost({ request, env }) {
         );
       }
 
-      newBalance = before - total;
+      newBalance = before - grandTotal;
       const now     = new Date().toISOString();
       const txLogId = randomId();
 
@@ -173,9 +185,9 @@ export async function onRequestPost({ request, env }) {
             fields: toFsFields({
               id:            purchaseId,
               items:         safeItems,
-              total,
-              cartSubtotal:  total,   // no convenience fee on wallet payments
-              serviceCharge: 0,   // kept as 0; field name preserved for DB compatibility
+              total:         grandTotal,
+              cartSubtotal:  total,
+              serviceCharge: serviceCharge,
               date:          now,
               verified:      false,
               storeId,
@@ -195,7 +207,9 @@ export async function onRequestPost({ request, env }) {
             name:   `${docPath(`users/${uid}/walletTransactions/${txLogId}`)}`,
             fields: toFsFields({
               type:          'debit',
-              amount:        total,
+              amount:        grandTotal,
+              cartSubtotal:  total,
+              serviceCharge: serviceCharge,
               purchaseId,
               description:   'Purchase at CGrocs',
               date:          now,
@@ -211,7 +225,7 @@ export async function onRequestPost({ request, env }) {
       throw txErr;
     }
 
-    return Response.json({ success: true, newBalance, purchaseId }, { headers: CORS });
+    return Response.json({ success: true, newBalance, purchaseId, serviceCharge, grandTotal }, { headers: CORS });
 
   } catch (err) {
     console.error('[wallet-pay]', err);
