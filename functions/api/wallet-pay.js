@@ -41,7 +41,7 @@
 
 import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
-  fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId,
+  fsCommit, fsRollback, fsBase, fsDocPath, toFsFields, fromFsFields, randomId,
   verifyCustomerIdToken
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
@@ -116,6 +116,7 @@ export async function onRequestPost({ request, env }) {
     const token     = await getAccessToken(sa);
     const projectId = sa.project_id;
     const base      = fsBase(projectId);
+    const docPath   = (path) => fsDocPath(projectId, path);
 
     // ── Firestore transaction ────────────────────────────────────────────────
     const tx = await fsBeginTransaction(token, projectId);
@@ -159,7 +160,7 @@ export async function onRequestPost({ request, env }) {
         // 1. Deduct wallet balance (field mask: only walletBalance)
         {
           update: {
-            name:   `${base}/users/${uid}`,
+            name:   `${docPath(`users/${uid}`)}`,
             fields: toFsFields({ walletBalance: newBalance })
           },
           updateMask: { fieldPaths: ['walletBalance'] }
@@ -168,7 +169,7 @@ export async function onRequestPost({ request, env }) {
         // 2. Create the purchase document
         {
           update: {
-            name:   `${base}/stores/${storeId}/purchases/${purchaseId}`,
+            name:   `${docPath(`stores/${storeId}/purchases/${purchaseId}`)}`,
             fields: toFsFields({
               id:            purchaseId,
               items:         safeItems,
@@ -191,7 +192,7 @@ export async function onRequestPost({ request, env }) {
         // 3. Wallet transaction log entry
         {
           update: {
-            name:   `${base}/users/${uid}/walletTransactions/${txLogId}`,
+            name:   `${docPath(`users/${uid}/walletTransactions/${txLogId}`)}`,
             fields: toFsFields({
               type:          'debit',
               amount:        total,

@@ -25,7 +25,7 @@
 
 import {
   getAccessToken, fsGet, fsGetInTx, fsBeginTransaction,
-  fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId,
+  fsCommit, fsRollback, fsBase, fsDocPath, toFsFields, fromFsFields, randomId,
   verifyCustomerIdToken
 } from '../_wallet-firebase.js';
 
@@ -95,6 +95,7 @@ export async function onRequestPost({ request, env }) {
     const token     = await getAccessToken(sa);
     const projectId = sa.project_id;
     const base      = fsBase(projectId);
+    const docPath   = (path) => fsDocPath(projectId, path);
 
     // ── 4. Replay guard: check reference not already used ────────────────────
     const usedDoc = await fsGet(token, projectId, `usedPaystackRefs/${reference}`);
@@ -122,7 +123,7 @@ export async function onRequestPost({ request, env }) {
         // Credit wallet balance (mask so other profile fields are untouched)
         {
           update: {
-            name:   `${base}/users/${uid}`,
+            name:   `${docPath(`users/${uid}`)}`,
             fields: toFsFields({ walletBalance: newBalance })
           },
           updateMask: { fieldPaths: ['walletBalance'] }
@@ -130,7 +131,7 @@ export async function onRequestPost({ request, env }) {
         // Transaction log entry
         {
           update: {
-            name:   `${base}/users/${uid}/walletTransactions/${txLogId}`,
+            name:   `${docPath(`users/${uid}/walletTransactions/${txLogId}`)}`,
             fields: toFsFields({
               type:          'credit',
               amount,
@@ -145,7 +146,7 @@ export async function onRequestPost({ request, env }) {
         // Mark reference as used (prevents replay attacks)
         {
           update: {
-            name:   `${base}/usedPaystackRefs/${reference}`,
+            name:   `${docPath(`usedPaystackRefs/${reference}`)}`,
             fields: toFsFields({ uid, amount, date: now })
           }
         }
@@ -160,7 +161,7 @@ export async function onRequestPost({ request, env }) {
   } catch (err) {
     console.error('[verify-wallet-topup]', err);
     return Response.json(
-      { error: err.message || 'Internal server error', debug_stack: err.stack || '', debug_name: err.name || '' },
+      { error: err.message || 'Internal server error' },
       { status: 500, headers: CORS }
     );
   }

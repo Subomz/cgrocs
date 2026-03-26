@@ -38,7 +38,7 @@
 
 import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
-  fsCommit, fsRollback, fsBase, toFsFields, fromFsFields, randomId,
+  fsCommit, fsRollback, fsBase, fsDocPath, toFsFields, fromFsFields, randomId,
   verifyCustomerIdToken, fsGet
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
@@ -103,6 +103,7 @@ export async function onRequestPost({ request, env }) {
     const token     = await getAccessToken(sa);
     const projectId = sa.project_id;
     const base      = fsBase(projectId);
+    const docPath   = (path) => fsDocPath(projectId, path);
 
     // ── STEP 1: Deduct balance in Firestore BEFORE calling Paystack ───────────
     // This prevents two concurrent requests from both passing the balance check
@@ -133,14 +134,14 @@ export async function onRequestPost({ request, env }) {
       await fsCommit(token, projectId, tx, [
         {
           update: {
-            name:   `${base}/users/${uid}`,
+            name:   `${docPath(`users/${uid}`)}`,
             fields: toFsFields({ walletBalance: newBalance })
           },
           updateMask: { fieldPaths: ['walletBalance'] }
         },
         {
           update: {
-            name:   `${base}/users/${uid}/walletTransactions/${txLogId}`,
+            name:   `${docPath(`users/${uid}/walletTransactions/${txLogId}`)}`,
             fields: toFsFields({
               type:          'debit',
               amount,
@@ -236,7 +237,7 @@ export async function onRequestPost({ request, env }) {
         await fsCommit(token, projectId, refundTx, [
           {
             update: {
-              name:   `${base}/users/${uid}`,
+              name:   `${docPath(`users/${uid}`)}`,
               fields: toFsFields({ walletBalance: freshBalance + amount })
             },
             updateMask: { fieldPaths: ['walletBalance'] }

@@ -94,6 +94,16 @@ function fsBase(projectId) {
 }
 export { fsBase };
 
+/**
+ * Returns the Firestore document name path used in commit write operations.
+ * fsCommit expects names starting with "projects/..." NOT the full URL.
+ * e.g. fsDocPath('myproject', 'users/uid123')
+ *   → "projects/myproject/databases/(default)/documents/users/uid123"
+ */
+export function fsDocPath(projectId, docPath) {
+  return `projects/${projectId}/databases/(default)/documents/${docPath}`;
+}
+
 /** Get a single Firestore document. Returns null if not found. */
 export async function fsGet(token, projectId, path) {
   const res = await fetch(`${fsBase(projectId)}/${path}`, {
