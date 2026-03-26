@@ -47,6 +47,7 @@ import {
 import { verifyPinToken } from '../_wallet-pin.js';
 
 const grandTotal = 0; // + serviceCharge; --- IGNORE ---
+
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
