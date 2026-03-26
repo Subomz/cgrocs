@@ -160,7 +160,7 @@ export async function onRequestPost({ request, env }) {
   } catch (err) {
     console.error('[verify-wallet-topup]', err);
     return Response.json(
-      { error: err.message || 'Internal server error' },
+      { error: err.message || 'Internal server error', debug_stack: err.stack || '', debug_name: err.name || '' },
       { status: 500, headers: CORS }
     );
   }
