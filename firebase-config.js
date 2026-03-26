@@ -34,7 +34,7 @@ export const headAdminConfig = {
 // The PUBLIC key is safe to expose in client-side code.
 // The SECRET key (sk_live_...) must ONLY ever live in Cloudflare environment
 // variables (PAYSTACK_SECRET_KEY) — never committed to source control.
-export const PAYSTACK_PUBLIC_KEY = 'pk_live_e0c9caffa250105c691eb5a76f63adac7b07ca34';
+export const PAYSTACK_PUBLIC_KEY = 'pk_test_d2c21aba4dc227c848ffca6dd5f44c50e75526b3';
 
 //  Store helpers 
 // All Firestore data is namespaced under /stores/{storeId}/ so the two stores
