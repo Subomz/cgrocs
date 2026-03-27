@@ -46,19 +46,13 @@ import {
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
 
+const grandTotal = 0; // + serviceCharge; --- IGNORE ---
+
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
-
-// Wallet convenience fee tiers (lower than Paystack as an incentive to use wallet)
-function getWalletServiceCharge(cartTotal) {
-  if (cartTotal < 1000)  return 30;
-  if (cartTotal < 10000) return 80;
-  if (cartTotal < 50000) return 130;
-  return 180;
-}
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -145,9 +139,7 @@ export async function onRequestPost({ request, env }) {
         );
       }
 
-      // Calculate wallet convenience fee server-side
-      const serviceCharge = getWalletServiceCharge(total);
-      const grandTotal    = total + serviceCharge;
+      const grandTotal    = total
 
       if (before < grandTotal) {
         await fsRollback(token, projectId, tx);
@@ -187,7 +179,6 @@ export async function onRequestPost({ request, env }) {
               items:         safeItems,
               total:         grandTotal,
               cartSubtotal:  total,
-              serviceCharge: serviceCharge,
               date:          now,
               verified:      false,
               storeId,
@@ -209,7 +200,6 @@ export async function onRequestPost({ request, env }) {
               type:          'debit',
               amount:        grandTotal,
               cartSubtotal:  total,
-              serviceCharge: serviceCharge,
               purchaseId,
               description:   'Purchase at CGrocs',
               date:          now,
@@ -225,7 +215,7 @@ export async function onRequestPost({ request, env }) {
       throw txErr;
     }
 
-    return Response.json({ success: true, newBalance, purchaseId, serviceCharge, grandTotal }, { headers: CORS });
+    return Response.json({ success: true, newBalance, purchaseId, grandTotal }, { headers: CORS });
 
   } catch (err) {
     console.error('[wallet-pay]', err);

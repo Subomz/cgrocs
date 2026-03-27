@@ -54,7 +54,6 @@ async function _walletPost(url, body) {
 
 
 window.walletBalance = 0;
-window._walletPaymentActive = false; // true when customer selects wallet as payment method
 
 // ── PIN session state ─────────────────────────────────────────────────────────
 // After a successful PIN verification the server returns a token valid ~5 min.
@@ -363,76 +362,6 @@ window._walletDoTopup = function() {
   });
 
   handler.openIframe();
-};
-
-// ── Wallet Pay (cart checkout) ───────────────────────────────────────────────
-
-/**
- * Called when customer selects wallet as payment method in the cart.
- * Sets window._walletPaymentActive so cart.js shows wallet fee tier.
- */
-window._walletActivatePayment = function() {
-  window._walletPaymentActive = true;
-  // Trigger cart display refresh so fee updates immediately
-  if (typeof updateCartDisplay === 'function') updateCartDisplay();
-};
-
-/**
- * Called when customer switches away from wallet payment.
- */
-window._walletDeactivatePayment = function() {
-  window._walletPaymentActive = false;
-  if (typeof updateCartDisplay === 'function') updateCartDisplay();
-};
-
-/**
- * Process a wallet payment for the current cart.
- * Called from the "Pay with Wallet" button in the cart.
- *
- * cartItems    — array of { name, quantity, price }
- * cartSubtotal — sum of item prices (before convenience fee)
- * purchaseId   — pre-generated ID (same one shown in QR)
- * onSuccess    — callback(newBalance, purchaseId) after successful payment
- */
-window._walletDoCartPayment = function(cartItems, cartSubtotal, purchaseId, onSuccess) {
-  var ctx = window._walletCtx;
-  if (!ctx || !ctx.uid) {
-    notify.error('Wallet not ready. Please refresh.');
-    return;
-  }
-
-  window._requireWalletPin(ctx.uid, async function(pinToken) {
-    if (pinToken === undefined) return; // cancelled
-
-    try {
-      var res  = await _walletPost('/api/wallet-pay', {
-        uid:           ctx.uid,
-        storeId:       (typeof window.getStoreId === 'function' ? window.getStoreId() : sessionStorage.getItem('selectedStore') || 'store1'),
-        purchaseId:    purchaseId,
-        items:         cartItems,
-        total:         cartSubtotal,
-        email:         ctx.email,
-        customerName:  (window.currentUser && window.currentUser.displayName) || '',
-        customerPhone: '',
-        pinToken:      pinToken
-      });
-      var data = await res.json();
-
-      if (data.success) {
-        window.walletBalance = data.newBalance;
-        _syncBalanceEverywhere(data.newBalance);
-        window._walletPaymentActive = false;
-        if (typeof onSuccess === 'function') onSuccess(data.newBalance, purchaseId, data.serviceCharge || 0, data.grandTotal || cartSubtotal);
-      } else if (data.requirePin) {
-        _clearPinToken();
-        notify.error('PIN session expired. Please try again.');
-      } else {
-        notify.error(data.error || 'Payment failed. Please try again.', 7000);
-      }
-    } catch (e) {
-      notify.error('Payment failed. Check your connection.', 8000);
-    }
-  });
 };
 
 // ── Withdrawal ────────────────────────────────────────────────────────────────
