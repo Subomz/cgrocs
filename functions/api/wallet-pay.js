@@ -10,11 +10,17 @@
 //    purchaseId:    string,
 //    items:         Array<{ name, quantity, price }>,
 //    total:         number  (naira — goods only, no service charge),
+//    serviceCharge: number  (naira — kept by main account),
+//    recipientCode: string | null  (RCP_xxx — store's Paystack transfer recipient),
 //    email:         string,
 //    customerName:  string,
 //    customerPhone: string,
 //    pinToken:      string | null
 //  }
+//
+//  Payment routing (mirrors Paystack checkout split):
+//    • total (goods value) → transferred to store via Paystack Transfers API (RCP_xxx)
+//    • serviceCharge       → stays in main Paystack account as platform revenue
 //
 //  Security: The caller's Firebase ID token is verified server-side and
 //  must match the uid in the body. This prevents one user from paying
@@ -41,12 +47,10 @@
 
 import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
-  fsCommit, fsRollback, fsBase, fsDocPath, toFsFields, fromFsFields, randomId,
+  fsCommit, fsRollback, fsDocPath, toFsFields, fromFsFields, randomId,
   verifyCustomerIdToken
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
-
-const grandTotal = 0; // + serviceCharge; --- IGNORE ---
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -61,7 +65,7 @@ export async function onRequestPost({ request, env }) {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS });
     }
 
-    const { uid, storeId, purchaseId, items, total, serviceCharge, subaccountCode, email, customerName, customerPhone, pinToken } = body;
+    const { uid, storeId, purchaseId, items, total, serviceCharge, recipientCode, email, customerName, customerPhone, pinToken } = body;
 
     // ── Validate inputs ──────────────────────────────────────────────────────
     if (!uid || typeof uid !== 'string') {
@@ -122,7 +126,6 @@ export async function onRequestPost({ request, env }) {
     const sa        = JSON.parse(env.FIREBASE_CUSTOMER_SERVICE_ACCOUNT);
     const token     = await getAccessToken(sa);
     const projectId = sa.project_id;
-    const base      = fsBase(projectId);
     const docPath   = (path) => fsDocPath(projectId, path);
 
     // ── Firestore transaction ────────────────────────────────────────────────
@@ -220,16 +223,22 @@ export async function onRequestPost({ request, env }) {
       throw txErr;
     }
 
-    // ── Paystack split transfer (mirrors the Paystack checkout flow) ─────────
-    // If the store has a subaccount configured, record the split transfer so
-    // the store's share of the service charge is routed to their bank account.
+    // ── Paystack transfer: route cartTotal to the store (mirrors checkout split) ─
+    //
+    // In Paystack checkout, the split is:
+    //   • cartTotal (goods value) → store subaccount  via transaction_charge + bearer:subaccount
+    //   • serviceCharge           → main account      (platform revenue)
+    //
+    // For wallet payments we replicate this manually using the Transfers API:
+    //   • cartTotal → store recipient (RCP_xxx)   — created by save-subaccount.js
+    //   • serviceCharge stays in main Paystack balance as platform revenue
+    //
     // This is best-effort — a Paystack failure does NOT reverse the purchase
-    // since the wallet deduction already committed. The transfer is for
-    // accounting/routing only.
-    if (subaccountCode && typeof subaccountCode === 'string' && subaccountCode.startsWith('ACCT_')) {
+    // since the wallet deduction already committed in Firestore. Any failure is
+    // logged to walletTransferFailures/{purchaseId} so it can be resolved manually.
+    if (recipientCode && typeof recipientCode === 'string' && recipientCode.startsWith('RCP_')) {
       try {
-        const transferRef = 'wlt-' + purchaseId;
-        await fetch('https://api.paystack.co/transfer', {
+        const transferRes = await fetch('https://api.paystack.co/transfer', {
           method:  'POST',
           headers: {
             Authorization:  `Bearer ${env.PAYSTACK_SECRET_KEY}`,
@@ -237,16 +246,35 @@ export async function onRequestPost({ request, env }) {
           },
           body: JSON.stringify({
             source:    'balance',
-            amount:    Math.round(_serviceCharge * 100),  // kobo
-            recipient: subaccountCode,
-            reason:    `CGrocs wallet purchase service charge — ${purchaseId}`,
-            reference: transferRef
+            amount:    Math.round(total * 100),   // cartTotal in kobo → goes to store
+            recipient: recipientCode,              // RCP_xxx (transfer recipient, not subaccount)
+            reason:    `CGrocs wallet purchase — ${purchaseId}`,
+            reference: 'wlt-' + purchaseId
           })
         });
-        // We intentionally do not throw on Paystack errors here —
-        // the purchase is already recorded and the balance deducted.
+        const transferData = await transferRes.json();
+        if (!transferData.status) {
+          throw new Error(transferData.message || 'Transfer API returned failure status');
+        }
       } catch (psErr) {
-        console.warn('[wallet-pay] Paystack split transfer failed (non-fatal):', psErr.message);
+        // Non-fatal: purchase is already recorded. Log the failure to Firestore
+        // so every unrouted wallet payment is traceable and can be manually resolved.
+        console.error('[wallet-pay] Store transfer failed (non-fatal):', psErr.message);
+        const failRef = `walletTransferFailures/${purchaseId}`;
+        await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${failRef}`, {
+          method:  'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: toFsFields({
+              purchaseId, uid, storeId,
+              amount:       total,
+              recipientCode,
+              error:        psErr.message,
+              date:         new Date().toISOString(),
+              resolved:     false
+            })
+          })
+        }).catch(() => {}); // swallow — do not shadow the successful payment response
       }
     }
 

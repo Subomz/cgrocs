@@ -313,10 +313,10 @@ function showQRCodeModal(purchaseId, items, total, serviceCharge, cartSubtotal) 
   modal.id = 'qr-modal';
 
   const storeId    = getActiveStore();
-  const storeLabel = sessionStorage.getItem('storeLabel_' + storeId) || storeId;
+  const storeLabel = escapeHtml(sessionStorage.getItem('storeLabel_' + storeId) || storeId);
 
   const itemsList = items.map(item =>
-    `${item.quantity}x ${item.name} @ ₦${parseFloat(item.price).toFixed(2)}`
+    `${item.quantity}x ${escapeHtml(item.name)} @ ₦${parseFloat(item.price).toFixed(2)}`
   ).join('<br>');
 
   modal.innerHTML = `
@@ -590,23 +590,32 @@ window._paystackOnClose = function() {
 };
 
 // ── Paystack split config ─────────────────────────────────────────────────────
+//
+// Each store has two Paystack codes stored in transferSettings/stores:
+//   subaccount_code (ACCT_xxx) — used by Paystack checkout split payments
+//   recipient_code  (RCP_xxx)  — used by the Transfers API for wallet payments
+//
+// Both are created together by save-subaccount.js and fetched once per session.
 
-const _subaccountCache = {};
+const _storePaymentConfigCache = {};
 
-async function getStoreSubaccountCode(storeId) {
-  if (_subaccountCache[storeId]) return _subaccountCache[storeId];
+async function getStorePaymentConfig(storeId) {
+  if (_storePaymentConfigCache[storeId]) return _storePaymentConfigCache[storeId];
   try {
     const snap = await getDoc(doc(haDb, 'transferSettings', 'stores'));
     if (snap.exists()) {
       const data = snap.data();
       Object.keys(data).forEach(id => {
-        if (data[id]?.subaccount_code) _subaccountCache[id] = data[id].subaccount_code;
+        _storePaymentConfigCache[id] = {
+          subaccountCode: data[id]?.subaccount_code || null,
+          recipientCode:  data[id]?.recipient_code  || null
+        };
       });
     }
   } catch (e) {
-    console.warn('Could not fetch subaccount code:', e.message);
+    console.warn('Could not fetch store payment config:', e.message);
   }
-  return _subaccountCache[storeId] || null;
+  return _storePaymentConfigCache[storeId] || { subaccountCode: null, recipientCode: null };
 }
 
 function getServiceCharge(cartTotal) {
@@ -660,7 +669,7 @@ window.proceedToPayment = async function() {
   var cartSnapshot   = cart.map(function(item) { return Object.assign({}, item); });
 
   var activeStore    = getActiveStore();
-  var subaccountCode = await getStoreSubaccountCode(activeStore);
+  var storeConfig    = await getStorePaymentConfig(activeStore);
 
   _paystackPayload = {
     purchaseId,
@@ -687,8 +696,11 @@ window.proceedToPayment = async function() {
     onClose:  window._paystackOnClose
   };
 
-  if (subaccountCode) {
-    paystackConfig.subaccount         = subaccountCode;
+  // Split payment: cartTotal → store subaccount, serviceCharge → main account.
+  // bearer:'account' means Paystack's own processing fees are deducted from
+  // the main account's portion, not the store's.
+  if (storeConfig.subaccountCode) {
+    paystackConfig.subaccount         = storeConfig.subaccountCode;
     paystackConfig.transaction_charge = Math.round(serviceCharge * 100);
     paystackConfig.bearer             = 'account';
   }
@@ -748,7 +760,7 @@ window.payWithWallet = async function() {
   const purchaseId   = generatePurchaseId();
   const cartSnapshot = cart.map(item => ({ ...item }));
   const activeStore  = getActiveStore();
-  const subaccountCode = await getStoreSubaccountCode(activeStore);
+  const storeConfig  = await getStorePaymentConfig(activeStore);
 
   // Require PIN before processing wallet payment
   const walletBtn = document.querySelector('.btn-wallet-pay');
@@ -760,7 +772,15 @@ window.payWithWallet = async function() {
     : function(uid, cb) { cb(null); }; // fallback: no PIN set yet, proceed
 
   _doPinGate(uid, async function(pinToken) {
-    if (pinToken === undefined) pinToken = null; // no PIN set on account
+    // Distinguish "user cancelled PIN modal" from "no PIN set on this account".
+    // _requireWalletPin calls onDone(null) for both cases. We can tell them apart
+    // by checking the cached pin-set flag. If PIN IS set and we got null back,
+    // the user pressed Cancel — abort silently and re-enable the button.
+    if (pinToken === null && window._walletPinSet === true) {
+      if (walletBtn) { walletBtn.disabled = false; walletBtn.textContent = 'Pay with Wallet'; }
+      return;
+    }
+    if (pinToken === undefined) pinToken = null; // no PIN set on account, proceed
 
   try {
     if (walletBtn) walletBtn.textContent = 'Processing…';
@@ -773,16 +793,16 @@ window.payWithWallet = async function() {
       },
       body:    JSON.stringify({
         uid,
-        storeId:        activeStore,
+        storeId:       activeStore,
         purchaseId,
-        items:          cartSnapshot.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
-        total:          cartTotal,
+        items:         cartSnapshot.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+        total:         cartTotal,
         serviceCharge,
-        subaccountCode: subaccountCode || null,
-        email:          email   || '',
-        customerName:   _profileName  || '',
-        customerPhone:  _profilePhone || '',
-        pinToken:       pinToken
+        recipientCode: storeConfig.recipientCode || null,
+        email:         email   || '',
+        customerName:  _profileName  || '',
+        customerPhone: _profilePhone || '',
+        pinToken:      pinToken
       })
     });
 

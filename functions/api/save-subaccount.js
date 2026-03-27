@@ -56,10 +56,14 @@ export async function onRequestPost(context) {
     const sa    = JSON.parse(saJson);
     const token = await getAccessToken(sa);
 
-    const snap          = await fsGet(HEAD_ADMIN_PROJECT, 'transferSettings/stores', token);
-    const existing      = snap ? fromDoc(snap) : null;
-    const existing_code = existing?.[storeId]?.subaccount_code || null;
+    const snap            = await fsGet(HEAD_ADMIN_PROJECT, 'transferSettings/stores', token);
+    const existing        = snap ? fromDoc(snap) : null;
+    const existing_code   = existing?.[storeId]?.subaccount_code || null;
+    const existing_rcp    = existing?.[storeId]?.recipient_code  || null;
 
+    // ── Step 1: Create or update the Paystack subaccount ─────────────────────
+    // The subaccount (ACCT_xxx) is used for Paystack checkout split payments.
+    // It routes cartTotal to the store during card payments.
     let result;
     if (existing_code) {
       result = await fetch(`https://api.paystack.co/subaccount/${existing_code}`, {
@@ -86,7 +90,43 @@ export async function onRequestPost(context) {
     const biz             = result.data.business_name;
     const acct            = result.data.account_number;
 
-    const storeData = toFields({ subaccount_code, business_name: biz, bank_code, account_number: acct });
+    // ── Step 2: Create or reuse a transfer recipient (RCP_xxx) ───────────────
+    // The recipient (RCP_xxx) is a separate Paystack entity required for the
+    // Transfers API. wallet-pay.js uses this to route cartTotal to the store
+    // from the platform's Paystack balance when a customer pays with their wallet.
+    // We reuse an existing recipient if one was already created for this store.
+    let recipient_code = existing_rcp;
+
+    if (!recipient_code) {
+      const rcpRes = await fetch('https://api.paystack.co/transferrecipient', {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          type:           'nuban',
+          name:           biz,
+          account_number: acct,
+          bank_code,
+          currency:       'NGN'
+        })
+      }).then(r => r.json());
+
+      if (rcpRes.status && rcpRes.data?.recipient_code) {
+        recipient_code = rcpRes.data.recipient_code;
+      } else {
+        // Non-fatal: wallet transfers will simply not route to the store until
+        // this is resolved. Log it but do not block subaccount setup.
+        console.error('[save-subaccount] Could not create transfer recipient:', rcpRes.message);
+      }
+    }
+
+    // ── Step 3: Persist both codes to Firestore ───────────────────────────────
+    const storeData = toFields({
+      subaccount_code,
+      recipient_code: recipient_code || '',
+      business_name:  biz,
+      bank_code,
+      account_number: acct
+    });
     await fsPatch(
       HEAD_ADMIN_PROJECT,
       'transferSettings/stores',
@@ -95,7 +135,7 @@ export async function onRequestPost(context) {
       token
     );
 
-    return Response.json({ subaccount_code, business_name: biz, account_number: acct }, { headers: CORS });
+    return Response.json({ subaccount_code, recipient_code: recipient_code || null, business_name: biz, account_number: acct }, { headers: CORS });
 
   } catch (e) {
     console.error('[save-subaccount]', e.message);

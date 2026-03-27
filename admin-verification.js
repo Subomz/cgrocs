@@ -343,11 +343,15 @@ function renderPendingList() {
     const date         = p.date ? new Date(p.date).toLocaleString('en-NG',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     const itemsText    = p.items ? p.items.map(i => `<span class="pend-item-pill">${escapeHtml(String(i.quantity))}× ${escapeHtml(i.name)}</span>`).join('') : '—';
     const customerName = escapeHtml(p.customerName || p.email || 'Unknown customer');
+    const isWallet     = p.paymentMethod === 'wallet';
+    const methodBadge  = isWallet
+      ? '<span style="font-size:11px;font-weight:700;background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle;">Wallet</span>'
+      : '';
     return `
     <div class="pending-card" id="pcard-${p._docId.replace(/[^a-zA-Z0-9_-]/g,"")}">
       <div class="pend-top">
         <div class="pend-left">
-          <div class="pend-customer">${customerName}</div>
+          <div class="pend-customer">${customerName}${methodBadge}</div>
           <div class="pend-date">${date}</div>
         </div>
         <div class="pend-right">

@@ -185,8 +185,8 @@ async function _refreshCatList() {
   if (cats.length === 0) { el.innerHTML = '<span style="font-size:13px;color:#bbb;">None yet</span>'; return; }
   el.innerHTML = cats.map(c => `
     <span style="display:inline-flex;align-items:center;gap:4px;background:#f4f4f5;border-radius:20px;padding:5px 10px 5px 13px;font-size:13px;font-weight:600;color:#2D1A0A;">
-      ${c}
-      <button onclick="window.deleteCategory('${c.replace(/'/g,"\\'")}')"
+      ${escapeHtml(c)}
+      <button onclick="window.deleteCategory('${escapeHtml(c).replace(/'/g,"\\'")}')"
         style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#bbb;padding:0 2px;" title="Remove">×</button>
     </span>`).join('');
 }
@@ -377,9 +377,9 @@ function renderCardsHome() {
   }
   container.innerHTML = products.map((p,i) => `
     <div class="card">
-      <img src="${p.img||'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${p.name}"
+      <img src="${p.img||'https://placehold.co/400x300/f5f5f5/999?text=No+Image'}" alt="${escapeHtml(p.name)}"
            onerror="this.src='https://placehold.co/400x300/f5f5f5/999?text=No+Image'">
-      <h4>${p.name}</h4><p>₦${p.price.toLocaleString()}</p>
+      <h4>${escapeHtml(p.name)}</h4><p>₦${p.price.toLocaleString()}</p>
       <p class="stock-label ${p.stock<=0?'out-of-stock':''}">${p.stock>0?`In Stock: ${p.stock}`:'Out of Stock'}</p>
       <button class="btn-buy" onclick="redirectToLoginPage()">Add To Cart</button>
     </div>`).join('');

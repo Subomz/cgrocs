@@ -39,7 +39,7 @@
 import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
   fsCommit, fsRollback, fsBase, fsDocPath, toFsFields, fromFsFields, randomId,
-  verifyCustomerIdToken, fsGet
+  verifyCustomerIdToken
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
 

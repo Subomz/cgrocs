@@ -196,6 +196,9 @@ window.openWalletPanel = function() {
   overlay.style.display = 'block';
   panel.classList.add('open');
   _showSection('wallet-section-main');
+  // Invalidate the cached PIN-set flag each time the panel opens so any
+  // server-side change (PIN set or cleared) is picked up on next payment.
+  window._walletPinSet = undefined;
   var ctx = window._walletCtx;
   if (ctx && ctx.uid) {
     _syncBalanceEverywhere(window.walletBalance);
@@ -371,13 +374,10 @@ var _banksCache = null;
 async function _loadBanks() {
   if (_banksCache) return _banksCache;
   try {
-    // Paystack's bank list endpoint is public — no auth needed
-    var res  = await fetch('https://api.paystack.co/bank?currency=NGN&perPage=200');
+    var res  = await fetch('/api/get-banks');
     var data = await res.json();
-    if (data.status && Array.isArray(data.data)) {
-      _banksCache = data.data
-        .map(function(b) { return { name: b.name, code: b.code }; })
-        .sort(function(a, b) { return a.name.localeCompare(b.name); });
+    if (data.banks && Array.isArray(data.banks)) {
+      _banksCache = data.banks.sort(function(a, b) { return a.name.localeCompare(b.name); });
       return _banksCache;
     }
   } catch (e) {

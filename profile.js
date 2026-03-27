@@ -258,16 +258,23 @@ async function loadPurchaseHistory(uid) {
     listEl.innerHTML = '<p class="empty-state">Loading...</p>';
 
     try {
-        // Security fix: scope query to the current user instead of loading
-        // all purchases and filtering client-side. This also improves performance.
-        const storeId = sessionStorage.getItem('selectedStore') || 'store1';
-        const q = query(
-            collection(db, storeCol(storeId, 'purchases')),
-            where('uid', '==', uid)
+        // Query ALL stores so a customer who shops at multiple locations sees
+        // their complete history. We run both queries in parallel then merge.
+        const STORE_IDS = ['store1', 'store2'];
+        const snapResults = await Promise.allSettled(
+            STORE_IDS.map(storeId =>
+                getDocs(query(
+                    collection(db, storeCol(storeId, 'purchases')),
+                    where('uid', '==', uid)
+                ))
+            )
         );
-        const snap = await getDocs(q);
         const purchases = [];
-        snap.forEach(d => purchases.push(d.data()));
+        snapResults.forEach(result => {
+            if (result.status === 'fulfilled') {
+                result.value.forEach(d => purchases.push(d.data()));
+            }
+        });
 
         if (purchases.length === 0) {
             listEl.innerHTML = '<p class="empty-state">No purchases yet.</p>';
