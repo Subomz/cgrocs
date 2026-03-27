@@ -61,7 +61,7 @@ export async function onRequestPost({ request, env }) {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS });
     }
 
-    const { uid, storeId, purchaseId, items, total, email, customerName, customerPhone, pinToken } = body;
+    const { uid, storeId, purchaseId, items, total, serviceCharge, subaccountCode, email, customerName, customerPhone, pinToken } = body;
 
     // ── Validate inputs ──────────────────────────────────────────────────────
     if (!uid || typeof uid !== 'string') {
@@ -79,6 +79,11 @@ export async function onRequestPost({ request, env }) {
     if (typeof total !== 'number' || total <= 0 || !isFinite(total)) {
       return Response.json({ error: 'Invalid total' }, { status: 400, headers: CORS });
     }
+    // serviceCharge is optional but must be a non-negative number if provided
+    const _serviceCharge = (typeof serviceCharge === 'number' && isFinite(serviceCharge) && serviceCharge >= 0)
+      ? serviceCharge
+      : 0;
+    const _grandTotal = total + _serviceCharge;
 
     // ── Verify the caller's Firebase ID token ────────────────────────────────
     // Ensures the request comes from the authenticated user whose uid is in
@@ -139,9 +144,7 @@ export async function onRequestPost({ request, env }) {
         );
       }
 
-      const grandTotal    = total
-
-      if (before < grandTotal) {
+      if (before < _grandTotal) {
         await fsRollback(token, projectId, tx);
         return Response.json(
           { error: 'Insufficient wallet balance', balance: before },
@@ -149,7 +152,7 @@ export async function onRequestPost({ request, env }) {
         );
       }
 
-      newBalance = before - grandTotal;
+      newBalance = before - _grandTotal;
       const now     = new Date().toISOString();
       const txLogId = randomId();
 
@@ -177,8 +180,9 @@ export async function onRequestPost({ request, env }) {
             fields: toFsFields({
               id:            purchaseId,
               items:         safeItems,
-              total:         grandTotal,
+              total:         _grandTotal,
               cartSubtotal:  total,
+              serviceCharge: _serviceCharge,
               date:          now,
               verified:      false,
               storeId,
@@ -198,8 +202,9 @@ export async function onRequestPost({ request, env }) {
             name:   `${docPath(`users/${uid}/walletTransactions/${txLogId}`)}`,
             fields: toFsFields({
               type:          'debit',
-              amount:        grandTotal,
+              amount:        _grandTotal,
               cartSubtotal:  total,
+              serviceCharge: _serviceCharge,
               purchaseId,
               description:   'Purchase at CGrocs',
               date:          now,
@@ -215,7 +220,37 @@ export async function onRequestPost({ request, env }) {
       throw txErr;
     }
 
-    return Response.json({ success: true, newBalance, purchaseId, grandTotal }, { headers: CORS });
+    // ── Paystack split transfer (mirrors the Paystack checkout flow) ─────────
+    // If the store has a subaccount configured, record the split transfer so
+    // the store's share of the service charge is routed to their bank account.
+    // This is best-effort — a Paystack failure does NOT reverse the purchase
+    // since the wallet deduction already committed. The transfer is for
+    // accounting/routing only.
+    if (subaccountCode && typeof subaccountCode === 'string' && subaccountCode.startsWith('ACCT_')) {
+      try {
+        const transferRef = 'wlt-' + purchaseId;
+        await fetch('https://api.paystack.co/transfer', {
+          method:  'POST',
+          headers: {
+            Authorization:  `Bearer ${env.PAYSTACK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            source:    'balance',
+            amount:    Math.round(_serviceCharge * 100),  // kobo
+            recipient: subaccountCode,
+            reason:    `CGrocs wallet purchase service charge — ${purchaseId}`,
+            reference: transferRef
+          })
+        });
+        // We intentionally do not throw on Paystack errors here —
+        // the purchase is already recorded and the balance deducted.
+      } catch (psErr) {
+        console.warn('[wallet-pay] Paystack split transfer failed (non-fatal):', psErr.message);
+      }
+    }
+
+    return Response.json({ success: true, newBalance, purchaseId, grandTotal: _grandTotal, serviceCharge: _serviceCharge }, { headers: CORS });
 
   } catch (err) {
     console.error('[wallet-pay]', err);

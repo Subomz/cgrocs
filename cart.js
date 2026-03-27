@@ -719,12 +719,14 @@ window.payWithWallet = async function() {
     return;
   }
 
-  const cartTotal = calculateTotal();
-  const balance   = window.walletBalance || 0;
+  const cartTotal     = calculateTotal();
+  const serviceCharge = getServiceCharge(cartTotal);
+  const grandTotal    = cartTotal + serviceCharge;
+  const balance       = window.walletBalance || 0;
 
-  if (balance < cartTotal) {
-    const shortfall = cartTotal - balance;
-    const topupMsg  = `You need ₦${shortfall.toLocaleString('en-NG', { minimumFractionDigits: 2 })} more.`;
+  if (balance < grandTotal) {
+    const shortfall = grandTotal - balance;
+    const topupMsg  = `You need ₦${shortfall.toLocaleString('en-NG', { minimumFractionDigits: 2 })} more (includes ₦${serviceCharge.toFixed(2)} service charge).`;
     notify.warning(`Insufficient wallet balance. ${topupMsg}`);
     return;
   }
@@ -746,6 +748,7 @@ window.payWithWallet = async function() {
   const purchaseId   = generatePurchaseId();
   const cartSnapshot = cart.map(item => ({ ...item }));
   const activeStore  = getActiveStore();
+  const subaccountCode = await getStoreSubaccountCode(activeStore);
 
   // Require PIN before processing wallet payment
   const walletBtn = document.querySelector('.btn-wallet-pay');
@@ -770,14 +773,16 @@ window.payWithWallet = async function() {
       },
       body:    JSON.stringify({
         uid,
-        storeId:       activeStore,
+        storeId:        activeStore,
         purchaseId,
-        items:         cartSnapshot.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
-        total:         cartTotal,
-        email:         email   || '',
-        customerName:  _profileName  || '',
-        customerPhone: _profilePhone || '',
-        pinToken:      pinToken
+        items:          cartSnapshot.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+        total:          cartTotal,
+        serviceCharge,
+        subaccountCode: subaccountCode || null,
+        email:          email   || '',
+        customerName:   _profileName  || '',
+        customerPhone:  _profilePhone || '',
+        pinToken:       pinToken
       })
     });
 
@@ -830,8 +835,8 @@ window.payWithWallet = async function() {
       }).catch(e => console.error('Error reloading products:', e));
     }
 
-    // Show QR modal (no service charge on wallet payments)
-    showQRCodeModal(purchaseId, cartSnapshot, cartTotal, 0, cartTotal);
+    // Show QR modal — wallet payments now include service charge, same as Paystack
+    showQRCodeModal(purchaseId, cartSnapshot, grandTotal, serviceCharge, cartTotal);
 
     // Clear cart
     cart = [];
@@ -948,9 +953,11 @@ function updateCartDisplay() {
     const existing = cartFooter.querySelector('.wallet-pay-row');
     if (existing) existing.remove();
 
-    const balance      = window.walletBalance || 0;
-    const cartSubtotal = calculateTotal();      // wallet pays subtotal only (no service charge)
-    const hasFunds     = balance >= cartSubtotal;
+    const balance       = window.walletBalance || 0;
+    const cartSubtotal  = calculateTotal();
+    const walletCharge  = getServiceCharge(cartSubtotal);
+    const walletTotal   = cartSubtotal + walletCharge;
+    const hasFunds      = balance >= walletTotal;
 
     const walletRow = document.createElement('div');
     walletRow.className = 'wallet-pay-row';
@@ -960,7 +967,9 @@ function updateCartDisplay() {
         ${hasFunds ? '— <strong style="color:#16a34a;">sufficient</strong>' : ''}
       </p>
       <button class="btn-wallet-pay" onclick="payWithWallet()" ${hasFunds ? '' : 'disabled'}>
-        ${hasFunds ? '◎ Pay with Wallet (₦' + cartSubtotal.toLocaleString('en-NG', { minimumFractionDigits: 2 }) + ')' : '◎ Insufficient balance'}
+        ${hasFunds
+          ? '◎ Pay with Wallet (₦' + walletTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 }) + ')'
+          : '◎ Insufficient balance'}
       </button>`;
     cartFooter.appendChild(walletRow);
   } else if (cartFooter) {
