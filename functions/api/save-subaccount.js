@@ -64,19 +64,36 @@ export async function onRequestPost(context) {
     // ── Step 1: Create or update the Paystack subaccount ─────────────────────
     // The subaccount (ACCT_xxx) is used for Paystack checkout split payments.
     // It routes cartTotal to the store during card payments.
+    //
+    // The stored subaccount_code can become stale when switching between test
+    // and live Paystack keys — a code created in test mode doesn't exist in
+    // live mode and vice versa. If Paystack returns "not found" on PUT, we
+    // fall through to create a fresh one instead of surfacing the 502 error.
     let result;
+    let subaccountCreatedFresh = false;
+
     if (existing_code) {
       result = await fetch(`https://api.paystack.co/subaccount/${existing_code}`, {
         method:  'PUT',
         headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
         body:    JSON.stringify({ business_name, settlement_bank: bank_code, account_number })
       }).then(r => r.json());
-    } else {
+
+      // If Paystack says the code doesn't exist (stale code from wrong mode),
+      // discard it and create a fresh subaccount instead of returning 502.
+      if (!result.status && /not found|does not exist|invalid/i.test(result.message || '')) {
+        console.warn('[save-subaccount] Stored subaccount_code not found in Paystack, creating fresh one.');
+        result = null;
+      }
+    }
+
+    if (!existing_code || !result) {
       result = await fetch('https://api.paystack.co/subaccount', {
         method:  'POST',
         headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
         body:    JSON.stringify({ business_name, settlement_bank: bank_code, account_number, percentage_charge: 0 })
       }).then(r => r.json());
+      subaccountCreatedFresh = true;
     }
 
     if (!result.status) {
@@ -91,11 +108,11 @@ export async function onRequestPost(context) {
     const acct            = result.data.account_number;
 
     // ── Step 2: Create or reuse a transfer recipient (RCP_xxx) ───────────────
-    // The recipient (RCP_xxx) is a separate Paystack entity required for the
-    // Transfers API. wallet-pay.js uses this to route cartTotal to the store
-    // from the platform's Paystack balance when a customer pays with their wallet.
-    // We reuse an existing recipient if one was already created for this store.
-    let recipient_code = existing_rcp;
+    // The recipient (RCP_xxx) is required by the Transfers API for wallet payments.
+    // We reuse the stored one unless the subaccount was just recreated fresh
+    // (which happens when switching modes), in which case we always create a new
+    // recipient to match the new subaccount.
+    let recipient_code = subaccountCreatedFresh ? null : existing_rcp;
 
     if (!recipient_code) {
       const rcpRes = await fetch('https://api.paystack.co/transferrecipient', {
@@ -113,8 +130,8 @@ export async function onRequestPost(context) {
       if (rcpRes.status && rcpRes.data?.recipient_code) {
         recipient_code = rcpRes.data.recipient_code;
       } else {
-        // Non-fatal: wallet transfers will simply not route to the store until
-        // this is resolved. Log it but do not block subaccount setup.
+        // Non-fatal: wallet transfers will not route to the store until resolved.
+        // The subaccount (card payments) still works fine without this.
         console.error('[save-subaccount] Could not create transfer recipient:', rcpRes.message);
       }
     }
