@@ -39,7 +39,7 @@
 import {
   getAccessToken, fsGetInTx, fsBeginTransaction,
   fsCommit, fsRollback, fsBase, fsDocPath, toFsFields, fromFsFields, randomId,
-  verifyCustomerIdToken
+  verifyCustomerIdToken, fsGet
 } from '../_wallet-firebase.js';
 import { verifyPinToken } from '../_wallet-pin.js';
 
@@ -211,7 +211,20 @@ export async function onRequestPost({ request, env }) {
       const transferData = await transferRes.json();
 
       if (!transferData.status) {
-        throw new Error(transferData.message || 'Transfer initiation failed.');
+        const raw = transferData.message || 'Transfer initiation failed.';
+        // Detect Paystack starter-business restriction so the user gets a
+        // clear explanation instead of a raw Paystack error string.
+        const isStarterRestriction =
+          /starter/i.test(raw) ||
+          /3rd.?party/i.test(raw) ||
+          /third.?party/i.test(raw) ||
+          /payout/i.test(raw) ||
+          /transfer.*not.*enabled/i.test(raw) ||
+          /upgrade/i.test(raw);
+        if (isStarterRestriction) {
+          throw new Error('STARTER_RESTRICTION');
+        }
+        throw new Error(raw);
       }
 
       transferCode = transferData.data?.transfer_code || reference;
@@ -254,8 +267,15 @@ export async function onRequestPost({ request, env }) {
       // Update log to failed status
       await _updateWithdrawalLog(token, projectId, base, uid, txLogId, 'failed', reference, paystackErr.message).catch(() => {});
 
+      // Return a user-facing message — detect the starter-business sentinel
+      // thrown above and give a clear, actionable explanation.
+      const isStarterRestriction = paystackErr.message === 'STARTER_RESTRICTION';
+      const userMessage = isStarterRestriction
+        ? 'Withdrawals are not available yet. Your Paystack account needs to be upgraded to a registered business to enable transfers. Your wallet balance has been refunded.'
+        : (paystackErr.message || 'Transfer failed. Your balance has been refunded.');
+
       return Response.json(
-        { error: paystackErr.message || 'Transfer failed. Your balance has been refunded.' },
+        { error: userMessage },
         { status: 400, headers: CORS }
       );
     }

@@ -27,12 +27,6 @@ export async function onRequestPost(context) {
     return Response.json({ error: 'bank_code must be 2–9 digits.' }, { status: 400, headers: CORS });
   }
 
-  if (secret.startsWith('sk_test_')) {
-    return Response.json({
-      error: 'Account verification requires a live Paystack secret key (sk_live_...). Update PAYSTACK_SECRET_KEY in your Cloudflare environment variables.'
-    }, { status: 400, headers: CORS });
-  }
-
   try {
     const url    = `https://api.paystack.co/bank/resolve?account_number=${encodeURIComponent(account_number)}&bank_code=${encodeURIComponent(bank_code)}`;
     const result = await fetch(url, { headers: { Authorization: `Bearer ${secret}` } }).then(r => r.json());
